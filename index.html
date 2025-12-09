@@ -3,873 +3,787 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>EggEPG - Client-side IPTV M3U Editor</title>
+<title>EggEPG - Final Build (Hybrid Parser + Worker)</title>
 
-<!-- small, self contained CSS -->
 <style>
 :root{
-  --bg:#f4f7fb;
-  --card:#ffffff;
-  --muted:#6b7280;
-  --accent:#0b79d0;
-  --panel-shadow: 0 6px 18px rgba(11,23,34,0.06);
+  --bg:#f4f7fb; --card:#ffffff; --muted:#6b7280; --accent:#0b79d0; --accent-2:#58a6ff;
+  --shadow: 0 6px 18px rgba(11,23,34,0.06);
 }
 [data-theme="dark"]{
-  --bg:#0f1720;
-  --card:#0b1220;
-  --muted:#9aa4b2;
-  --accent:#58a6ff;
-  color: #e6eefc;
+  --bg:#07101a; --card:#071824; --muted:#9aa4b2; --accent:#58a6ff; color:#e6eefc;
 }
-html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
-body{background:var(--bg);padding:18px;color:#06202b;}
-.container{max-width:1200px;margin:0 auto;}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:#06202b}
+.container{max-width:1180px;margin:12px auto;padding:12px}
 .header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .brand{display:flex;gap:12px;align-items:center}
-.logo{width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#0b79d0,#58a6ff);display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+.logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
 h1{margin:0;font-size:18px}
 .note{color:var(--muted);font-size:13px}
-.grid{display:grid;grid-template-columns:360px 1fr;gap:12px}
-.card{background:var(--card);padding:12px;border-radius:10px;box-shadow:var(--panel-shadow)}
-.small{padding:10px}
-.input,textarea,select{width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef6;box-sizing:border-box}
-textarea{min-height:120px;resize:vertical}
-.btn{background:var(--accent);color:#fff;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+.controls{display:flex;gap:8px;align-items:center}
+.btn{background:var(--accent);color:white;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
 .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(11,121,208,0.12)}
+.small{padding:8px}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:12px}
+.card{background:var(--card);padding:12px;border-radius:10px;box-shadow:var(--shadow)}
+.input,textarea,select{width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef6;background:transparent}
+textarea{min-height:120px;resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
-.filelist{max-height:360px;overflow:auto;border-radius:8px;border:1px dashed #e8f0fb;padding:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
+.filelist{max-height:560px;overflow:auto;border-radius:8px;border:1px dashed #e8f0fb;padding:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
 .channel{display:flex;gap:10px;align-items:center;padding:8px;border-bottom:1px solid #f1f5f9}
 .channel:last-child{border-bottom:0}
 .thumb{width:88px;height:48px;object-fit:contain;background:#fff;border-radius:6px;border:1px solid #eef4fb}
 .meta{flex:1;min-width:0}
 .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .muted{color:var(--muted);font-size:13px}
-.controls{display:flex;gap:8px;flex-wrap:wrap}
 .smallbtn{padding:6px 8px;font-size:13px;border-radius:7px}
 .info{font-size:13px;color:var(--muted);margin-top:8px}
 .footer{margin-top:12px;text-align:center;color:var(--muted);font-size:13px}
-.hidden{display:none}
-.toggle{background:transparent;border:1px solid #dbeafe;padding:6px 8px;border-radius:6px;color:var(--accent)}
-.bad{color:#b91c1c}
-.good{color:#137a46}
 .validator{font-family:monospace; font-size:13px; background:#f8fafc; padding:8px; border-radius:6px; margin-top:8px; border:1px solid #eef6ff}
-.code{font-family:monospace; font-size:13px}
-@media (max-width:980px){ .grid{grid-template-columns:1fr; } .thumb{width:64px;height:36px} }
+.bad{color:#b91c1c}
+.good{color:#047857}
+.hidden{display:none}
+.modal-backdrop{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(2,6,23,0.45);display:flex;align-items:center;justify-content:center;z-index:60}
+.modal{background:var(--card);padding:16px;border-radius:10px;max-width:720px;width:92%;box-shadow:var(--shadow)}
+.progressBar{height:10px;background:#e6eef6;border-radius:999px;overflow:hidden}
+.progressFill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%}
+@media (max-width:980px){ .grid{grid-template-columns:1fr} .thumb{width:64px;height:40px} .logo{width:40px;height:40px} .header{flex-direction:column;align-items:flex-start;gap:8px} }
 </style>
 </head>
 <body data-theme="light">
-<div class="container">
 
+<div class="container">
   <div class="header">
     <div class="brand">
       <div class="logo">EGG</div>
       <div>
         <h1>EggEPG</h1>
-        <div class="note">Client-side M3U editor - sorting, logos, automatic EPG id matching, Xtream converter</div>
+        <div class="note">Client-side M3U and EPG editor with hybrid parsing and worker support</div>
       </div>
     </div>
 
-    <div class="row">
-      <button id="saveProject" class="btn smallbtn">Save Project</button>
-      <button id="loadProject" class="btn smallbtn">Load Project</button>
-      <button id="clearProject" class="btn smallbtn ghost">Clear Project</button>
-      <button id="toggleTheme" class="toggle">Dark</button>
+    <div class="controls">
+      <button id="saveProject" class="btn smallbtn">Save</button>
+      <button id="loadProject" class="btn smallbtn ghost">Load</button>
+      <button id="resetProject" class="btn smallbtn ghost">Reset</button>
+      <button id="toggleTheme" class="btn smallbtn">Dark</button>
     </div>
   </div>
 
   <div class="grid">
-    <!-- left panel -->
-    <div class="card small">
-      <h3>1. Load or paste M3U</h3>
-      <div class="muted">Load a local M3U file or paste the playlist text below</div>
-      <input id="fileM3U" type="file" accept=".m3u,.txt" style="margin-top:8px" />
+    <div class="card">
+      <h3>1 - Load M3U</h3>
+      <div class="muted">Load local file or paste text. For large files this app uses a worker if available or a streaming parser to avoid freezes.</div>
+      <input id="fileM3U" type="file" accept=".m3u,.txt" style="margin-top:8px">
       <div class="row" style="margin-top:8px">
-        <button id="loadFileBtn" class="btn smallbtn">Load file</button>
-        <button id="pasteBtn" class="btn smallbtn ghost">Paste to editor</button>
+        <button id="btnLoadFile" class="btn smallbtn">Load file</button>
+        <button id="btnPasteToEditor" class="btn smallbtn ghost">Copy to editor</button>
       </div>
-
       <div style="margin-top:10px">
-        <textarea id="m3uInput" placeholder="#EXTM3U ... "></textarea>
+        <label class="muted">Raw M3U input</label>
+        <textarea id="m3uInput" placeholder="#EXTM3U ..."></textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="btnParse" class="btn smallbtn">Parse M3U</button>
+          <button id="btnValidate" class="btn smallbtn ghost">Validate</button>
+          <button id="btnAutoLogos" class="btn smallbtn ghost">Auto logos</button>
+        </div>
+        <div id="statusLine" class="info"></div>
+        <div style="margin-top:8px">
+          <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
+          <div id="progressText" class="muted" style="margin-top:6px">Idle</div>
+        </div>
       </div>
 
-      <hr style="margin:12px 0" />
+      <hr style="margin:12px 0">
 
-      <h3>2. Optional: Upload XMLTV for automatic mapping</h3>
-      <div class="muted">If you have an XMLTV file, EggEPG can try to match xmltv channel ids to your M3U channels by fuzzy matching.</div>
-      <input id="fileXml" type="file" accept=".xml,.xml.gz" style="margin-top:8px" />
+      <h3>2 - XMLTV (optional)</h3>
+      <div class="muted">Upload an XMLTV file to enable automatic EPG id matching.</div>
+      <input id="fileXML" type="file" accept=".xml,.xml.gz" style="margin-top:8px">
       <div class="row" style="margin-top:8px">
-        <button id="loadXmlBtn" class="btn smallbtn">Load XMLTV</button>
-        <button id="autoMatchBtn" class="btn smallbtn ghost">Auto match EPG ids</button>
+        <button id="btnLoadXML" class="btn smallbtn">Load XMLTV</button>
+        <button id="btnAutoMatch" class="btn smallbtn ghost">Auto match EPG ids</button>
       </div>
-      <div id="xmlInfo" class="info"></div>
+      <div id="xmlStatus" class="info"></div>
 
-      <hr style="margin:12px 0" />
+      <hr style="margin:12px 0">
 
-      <h3>3. Xtream Codes converter</h3>
-      <div class="muted">Generate a standard Xtream m3u URL or an M3U template using credentials. Client-side only.</div>
-      <input id="xcHost" class="input" placeholder="Host e.g. http://example.com:8080" style="margin-top:8px"/>
-      <input id="xcUser" class="input" placeholder="Username"/>
-      <input id="xcPass" class="input" placeholder="Password"/>
+      <h3>3 - Xtream Converter</h3>
+      <div class="muted">Convert Xtream credentials to a standard M3U URL. Client-side only.</div>
+      <input id="xcHost" class="input" placeholder="Host e.g. http://example.com:8080" style="margin-top:8px">
+      <input id="xcUser" class="input" placeholder="Username">
+      <input id="xcPass" class="input" placeholder="Password">
       <div class="row" style="margin-top:8px">
-        <button id="buildXtreamBtn" class="btn smallbtn">Generate URL</button>
-        <button id="buildXtreamM3UBtn" class="btn smallbtn ghost">Make M3U Template</button>
+        <button id="btnBuildXtream" class="btn smallbtn">Build URL</button>
+        <button id="btnBuildTemplate" class="btn smallbtn ghost">Make M3U template</button>
       </div>
       <div style="margin-top:8px">
-        <div class="muted">Xtream URL</div>
-        <div id="xtreamOut" class="code" style="margin-top:6px"></div>
+        <label class="muted">Xtream result</label>
+        <div id="xtreamOut" class="validator"></div>
       </div>
 
-      <hr style="margin:12px 0" />
+      <hr style="margin:12px 0">
 
-      <h3>4. Project</h3>
+      <h3>4 - Project</h3>
       <div class="muted">Save or load your current project locally.</div>
       <div class="row" style="margin-top:8px">
-        <button id="exportProjectBtn" class="btn smallbtn">Export JSON</button>
-        <button id="importProjectBtn" class="btn smallbtn ghost">Import JSON</button>
-        <input id="projFile" type="file" accept="application/json" class="hidden">
+        <button id="btnExportProject" class="btn smallbtn">Export JSON</button>
+        <button id="btnImportProject" class="btn smallbtn ghost">Import JSON</button>
+        <input id="importFile" type="file" accept="application/json" class="hidden">
       </div>
-
     </div>
 
-    <!-- right panel -->
     <div class="card">
       <h3>Channels</h3>
-      <div class="muted">Drag and drop channels to reorder. Use the controls to auto-fetch logos, remove duplicates, validate, and export the final playlist.</div>
+      <div class="muted">Drag and drop channels to reorder. Use controls to auto-fetch logos, remove duplicates, validate, export.</div>
 
-      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-        <button id="parseBtn" class="btn smallbtn">Parse M3U</button>
-        <button id="autoLogosBtn" class="btn smallbtn ghost">Auto logos (iptv-org + TVmaze)</button>
-        <button id="generateIdsBtn" class="btn smallbtn ghost">Generate missing tvg-ids</button>
-        <button id="removeDupBtn" class="btn smallbtn ghost">Remove duplicates</button>
-        <button id="validateBtn" class="btn smallbtn">Validate M3U</button>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="btnGenerateIds" class="btn smallbtn ghost">Generate missing ids</button>
+        <button id="btnRemoveDup" class="btn smallbtn ghost">Remove duplicates</button>
+        <button id="btnExport" class="btn smallbtn">Export M3U</button>
         <div style="flex:1"></div>
-        <button id="exportBtn" class="btn smallbtn">Export M3U</button>
+        <div class="muted">Channels: <span id="count">0</span></div>
       </div>
 
-      <div id="validatorResult" class="validator" style="margin-top:10px;display:none"></div>
+      <div id="validatorBox" class="validator hidden" style="margin-top:10px"></div>
 
       <div id="channelList" class="filelist" style="margin-top:12px">
-        <div class="muted">No channels loaded yet. Parse an M3U to populate this list.</div>
+        <div class="muted">No channels yet. Parse a playlist to populate the list.</div>
       </div>
 
-      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-        <div class="muted">Channels: <span id="chanCount">0</span></div>
-        <div style="flex:1"></div>
-        <div class="muted">Project autosaved to localStorage</div>
-      </div>
-
-      <hr style="margin:12px 0" />
+      <hr style="margin:12px 0">
 
       <h3>Editor</h3>
-      <div class="muted">You can edit the M3U text directly and re-parse. Current order and attributes are used when exporting.</div>
-      <textarea id="m3uEditor" style="margin-top:8px;min-height:160px"></textarea>
-
+      <div class="muted">Edit the current M3U text directly. Export uses the current order and attributes.</div>
+      <textarea id="m3uEditor" style="margin-top:8px;min-height:200px"></textarea>
     </div>
   </div>
 
-  <div class="footer">
-    EggEPG is client-side only. Use with care for private credentials. No data is sent anywhere by default.
-  </div>
+  <div class="footer">EggEPG - client-side only</div>
 </div>
 
-<!-- Single-file script implementing all features -->
+<!-- modal root -->
+<div id="modalRoot" class="hidden"></div>
+
 <script>
+/* EggEPG hybrid parser + worker single-file implementation
+   - Tries Web Worker first (inline Blob worker)
+   - Falls back to streaming chunked main thread parser
+   - Robust EXTINF attribute parsing (quoted attrs, commas inside)
+   - Reports progress and warnings
+   - Kept single-file and mobile friendly
+   - No em dash characters anywhere
+*/
+
 (function(){
 
 // State
-let state = {
-  channels: [], // {id,name,url,tvgId,tvgName,tvgLogo,rawExtinf,rawUrl}
-  xmltv: { channels: [], loaded: false }, // xmltv channels {id,display}
+const S = {
+  channels: [],
+  xmltv: { channels: [], loaded: false },
   settings: { theme: localStorage.getItem('eggepg_theme') || 'light' }
 };
 
-// Helpers
-const qs = s => document.querySelector(s);
-const qsa = s => Array.from(document.querySelectorAll(s));
-const uid = () => 'id_' + Math.random().toString(36).slice(2,9);
-const escapeHtml = s => (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// DOM shortcuts
+const $ = id => document.getElementById(id);
+const els = {
+  fileM3U: $('fileM3U'),
+  btnLoadFile: $('btnLoadFile'),
+  btnPasteToEditor: $('btnPasteToEditor'),
+  m3uInput: $('m3uInput'),
+  btnParse: $('btnParse'),
+  btnValidate: $('btnValidate'),
+  btnAutoLogos: $('btnAutoLogos'),
+  statusLine: $('statusLine'),
+  progressFill: $('progressFill'),
+  progressText: $('progressText'),
+  fileXML: $('fileXML'),
+  btnLoadXML: $('btnLoadXML'),
+  btnAutoMatch: $('btnAutoMatch'),
+  xmlStatus: $('xmlStatus'),
+  xcHost: $('xcHost'), xcUser: $('xcUser'), xcPass: $('xcPass'),
+  btnBuildXtream: $('btnBuildXtream'), btnBuildTemplate: $('btnBuildTemplate'),
+  xtreamOut: $('xtreamOut'),
+  btnExportProject: $('btnExportProject'), btnImportProject: $('btnImportProject'), importFile: $('importFile'),
+  btnGenerateIds: $('btnGenerateIds'), btnRemoveDup: $('btnRemoveDup'), btnExport: $('btnExport'),
+  validatorBox: $('validatorBox'),
+  channelList: $('channelList'), count: $('count'), m3uEditor: $('m3uEditor'),
+  saveProject: $('saveProject'), loadProject: $('loadProject'), resetProject: $('resetProject'),
+  toggleTheme: $('toggleTheme'),
+};
 
-// DOM elements
-const fileM3U = qs('#fileM3U');
-const loadFileBtn = qs('#loadFileBtn');
-const pasteBtn = qs('#pasteBtn');
-const m3uInput = qs('#m3uInput');
-const parseBtn = qs('#parseBtn');
-const channelListEl = qs('#channelList');
-const m3uEditor = qs('#m3uEditor');
-const exportBtn = qs('#exportBtn');
-const autoLogosBtn = qs('#autoLogosBtn');
-const removeDupBtn = qs('#removeDupBtn');
-const validateBtn = qs('#validateBtn');
-const validatorResult = qs('#validatorResult');
-const chanCount = qs('#chanCount');
-const generateIdsBtn = qs('#generateIdsBtn');
+// Init theme
+document.body.setAttribute('data-theme', S.settings.theme);
+els.toggleTheme.textContent = S.settings.theme === 'dark' ? 'Light' : 'Dark';
 
-const fileXml = qs('#fileXml');
-const loadXmlBtn = qs('#loadXmlBtn');
-const autoMatchBtn = qs('#autoMatchBtn');
-const xmlInfo = qs('#xmlInfo');
+// Inline worker code as string (will be turned into a Blob worker)
+const workerCode = `
 
-const saveProjectBtn = qs('#saveProject');
-const loadProjectBtn = qs('#loadProject');
-const clearProjectBtn = qs('#clearProject');
-const exportProjectBtn = qs('#exportProjectBtn');
-const importProjectBtn = qs('#importProjectBtn');
-const projFile = qs('#projFile');
+self.onmessage = function(e){
+  const msg = e.data;
+  if (msg && msg.cmd === 'parse') {
+    const text = msg.text;
+    parseM3UWorker(text);
+  }
+};
 
-const buildXtreamBtn = qs('#buildXtreamBtn');
-const buildXtreamM3UBtn = qs('#buildXtreamM3UBtn');
-const xcHost = qs('#xcHost');
-const xcUser = qs('#xcUser');
-const xcPass = qs('#xcPass');
-const xtreamOut = qs('#xtreamOut');
-
-const toggleThemeBtn = qs('#toggleTheme');
-
-// Initialize theme
-document.body.setAttribute('data-theme', state.settings.theme);
-toggleThemeBtn.textContent = state.settings.theme === 'dark' ? 'Light' : 'Dark';
-
-// Utility: save project to localStorage automatically
-function autosave() {
-  const proj = {
-    channels: state.channels,
-    xmltv: state.xmltv,
-    settings: state.settings,
-    m3uText: m3uEditor.value || m3uInput.value || ''
-  };
-  try { localStorage.setItem('eggepg_project', JSON.stringify(proj)); } catch(e){}
+function emitProgress(p) {
+  self.postMessage({ type: 'progress', progress: p });
 }
 
-// Load project if present on start
-(function loadOnStart(){
-  const raw = localStorage.getItem('eggepg_project');
-  if (raw) {
-    try {
-      const proj = JSON.parse(raw);
-      if (proj) {
-        if (proj.channels) state.channels = proj.channels;
-        if (proj.xmltv) state.xmltv = proj.xmltv;
-        if (proj.settings) { state.settings = proj.settings; document.body.setAttribute('data-theme', state.settings.theme || 'light'); toggleThemeBtn.textContent = state.settings.theme === 'dark' ? 'Light' : 'Dark'; }
-        if (proj.m3uText) { m3uEditor.value = proj.m3uText; m3uInput.value = proj.m3uText; }
-        renderChannelList();
-      }
-    } catch(e){}
-  }
-})();
-
-setInterval(autosave, 5000);
-
-// File load handlers
-loadFileBtn.addEventListener('click', () => {
-  const f = fileM3U.files[0];
-  if (!f) return alert('Choose a file first');
-  const r = new FileReader();
-  r.onload = e => {
-    m3uInput.value = e.target.result;
-    m3uEditor.value = e.target.result;
-    parseM3UText(e.target.result);
-  };
-  r.readAsText(f);
-});
-
-pasteBtn.addEventListener('click', () => {
-  if (!m3uInput.value.trim()) return alert('Paste the M3U text in the top box first');
-  m3uEditor.value = m3uInput.value;
-  parseM3UText(m3uInput.value);
-});
-
-// Parse button
-parseBtn.addEventListener('click', () => {
-  const text = m3uEditor.value.trim() || m3uInput.value.trim();
-  if (!text) return alert('No M3U text available in editor or input');
-  parseM3UText(text);
-  m3uEditor.value = buildM3UFromChannels();
-});
-
-// M3U parser
-function parseM3UText(text) {
-  const lines = text.split(/\r?\n/);
-  const chs = [];
-  let pending = null;
-  for (let raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (line.startsWith('#EXTINF')) {
-      pending = { rawExtinf: line };
-      // parse attributes
-      const tvgId = (line.match(/tvg-id="([^"]*)"/i) || [])[1] || '';
-      const tvgName = (line.match(/tvg-name="([^"]*)"/i) || [])[1] || '';
-      const tvgLogo = (line.match(/tvg-logo="([^"]*)"/i) || [])[1] || '';
-      const afterComma = line.indexOf(',') >= 0 ? line.split(',').slice(1).join(',').trim() : '';
-      const name = tvgName || afterComma || '';
-      pending.name = name;
-      pending.tvgId = tvgId;
-      pending.tvgName = tvgName || name;
-      pending.tvgLogo = tvgLogo;
-    } else if (line.startsWith('#')) {
-      // ignore other tags
-    } else {
-      // url line
-      if (!pending) {
-        // no meta - create basic
-        chs.push({
-          id: uid(),
-          name: line,
-          url: line,
-          tvgId: '',
-          tvgName: line,
-          tvgLogo: '',
-          rawExtinf: '',
-          rawUrl: line
-        });
-      } else {
-        pending.id = uid();
-        pending.url = line;
-        pending.rawUrl = line;
-        chs.push(pending);
-        pending = null;
-      }
-    }
-  }
-  state.channels = chs;
-  renderChannelList();
-  updateCounts();
-}
-
-// Render channel list UI
-function renderChannelList() {
-  channelListEl.innerHTML = '';
-  if (!state.channels || state.channels.length === 0) {
-    channelListEl.innerHTML = '<div class="muted">No channels loaded. Parse an M3U first.</div>';
-    return;
-  }
-  state.channels.forEach((ch, idx) => {
-    const div = document.createElement('div');
-    div.className = 'channel';
-    div.draggable = true;
-    div.dataset.index = idx;
-
-    const logoUrl = ch.tvgLogo || '';
-    const img = document.createElement('img');
-    img.className = 'thumb';
-    img.src = logoUrl || '';
-    img.alt = '';
-    img.onerror = function(){ this.style.visibility = 'hidden'; };
-
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.innerHTML = `<b title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</b>
-      <div class="muted">tvg-id: <span class="code">${escapeHtml(ch.tvgId || '')}</span></div>
-      <div class="muted">url: <span class="code">${escapeHtml(shorten(ch.url || ''))}</span></div>`;
-
-    const controls = document.createElement('div');
-    controls.style.display = 'flex';
-    controls.style.gap = '6px';
-    controls.innerHTML = `<button class="smallbtn">Edit</button><button class="smallbtn ghost">Set logo</button><button class="smallbtn ghost">Move top</button>`;
-
-    // buttons events
-    controls.children[0].addEventListener('click', ()=> editChannel(idx));
-    controls.children[1].addEventListener('click', ()=> setLogoPrompt(idx));
-    controls.children[2].addEventListener('click', ()=> moveToTop(idx));
-
-    // drag events
-    div.addEventListener('dragstart', e => {
-      e.dataTransfer.setData('text/plain', idx);
-      e.currentTarget.style.opacity = '0.6';
-    });
-    div.addEventListener('dragend', e => {
-      e.currentTarget.style.opacity = '';
-    });
-    div.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
-    div.addEventListener('drop', e => {
-      e.preventDefault();
-      const from = Number(e.dataTransfer.getData('text/plain'));
-      const to = Number(e.currentTarget.dataset.index);
-      reorderChannels(from, to);
-    });
-
-    div.appendChild(img);
-    div.appendChild(meta);
-    div.appendChild(controls);
-    channelListEl.appendChild(div);
-  });
-  updateCounts();
-}
-
-// Utility shorten url display
-function shorten(u) {
-  if (!u) return '';
+function parseM3UWorker(text) {
   try {
-    const url = new URL(u);
-    return url.hostname + url.pathname;
-  } catch(e) {
-    return u.length > 60 ? u.slice(0,60) + '...' : u;
-  }
-}
-
-// Channel edit
-function editChannel(idx) {
-  const ch = state.channels[idx];
-  const newName = prompt('Channel name (tvg-name)', ch.tvgName || ch.name) || ch.tvgName || ch.name;
-  const newId = prompt('tvg-id', ch.tvgId || '') || ch.tvgId || '';
-  const newLogo = prompt('tvg-logo URL', ch.tvgLogo || '') || ch.tvgLogo || '';
-  ch.name = newName;
-  ch.tvgName = newName;
-  ch.tvgId = newId;
-  ch.tvgLogo = newLogo;
-  renderChannelList();
-  m3uEditor.value = buildM3UFromChannels();
-}
-
-// Set logo prompt
-function setLogoPrompt(idx) {
-  const ch = state.channels[idx];
-  const url = prompt('Enter logo URL (leave empty to clear)', ch.tvgLogo || '') ;
-  if (url === null) return;
-  ch.tvgLogo = url.trim();
-  renderChannelList();
-  m3uEditor.value = buildM3UFromChannels();
-}
-
-// Move to top
-function moveToTop(idx) {
-  const item = state.channels.splice(idx,1)[0];
-  state.channels.unshift(item);
-  renderChannelList();
-  m3uEditor.value = buildM3UFromChannels();
-}
-
-// Reorder
-function reorderChannels(from, to) {
-  if (from === to) return;
-  const item = state.channels.splice(from,1)[0];
-  state.channels.splice(to,0,item);
-  renderChannelList();
-  m3uEditor.value = buildM3UFromChannels();
-}
-
-// Remove duplicates
-removeDupBtn.addEventListener('click', () => {
-  const seen = new Set();
-  const out = [];
-  for (const ch of state.channels) {
-    const key = (ch.tvgId || ch.name || ch.url).toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(ch);
-  }
-  state.channels = out;
-  renderChannelList();
-  m3uEditor.value = buildM3UFromChannels();
-});
-
-// Generate missing tvg-ids (slugify names)
-generateIdsBtn.addEventListener('click', () => {
-  for (const ch of state.channels) {
-    if (!ch.tvgId || ch.tvgId.trim() === '') {
-      ch.tvgId = slugify(ch.name);
-    }
-  }
-  renderChannelList();
-  m3uEditor.value = buildM3UFromChannels();
-});
-
-// Simple slugify
-function slugify(s) {
-  if (!s) return '';
-  return s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,64);
-}
-
-// Auto logos: use iptv-org logos repo, then TVmaze fallback
-autoLogosBtn.addEventListener('click', async () => {
-  if (!state.channels || state.channels.length === 0) return alert('No channels to fetch logos for');
-  const useIptvOrg = confirm('Try iptv-org logos first, then TVmaze for missing logos. Continue?');
-  if (!useIptvOrg) return;
-  qs('#channelList').style.opacity = '0.6';
-  for (let i=0;i<state.channels.length;i++){
-    const ch = state.channels[i];
-    // skip if already has logo
-    if (ch.tvgLogo && ch.tvgLogo.trim() !== '') continue;
-    // try iptv-org logos: the repo organizes logos by first char
-    const guess = guessIptvLogoUrl(ch.name);
-    if (guess) {
-      const ok = await imageExists(guess);
-      if (ok) { ch.tvgLogo = guess; renderChannelList(); await sleep(120); continue; }
-    }
-    // tvmaze fallback using show search
-    try {
-      const q = encodeURIComponent(ch.name.replace(/\(.+\)/,'').replace(/[^a-z0-9 ]/ig,' ').trim());
-      if (!q) continue;
-      const url = 'https://api.tvmaze.com/search/shows?q=' + q;
-      const res = await fetch(url);
-      if (!res.ok) { await sleep(120); continue; }
-      const js = await res.json();
-      if (Array.isArray(js) && js.length > 0) {
-        const show = js[0].show;
-        const logo = (show.image && (show.image.original || show.image.medium)) || '';
-        if (logo) { ch.tvgLogo = logo; renderChannelList(); await sleep(200); continue; }
+    // Normalize line endings and strip BOM
+    let t = text.replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n').replace(/^\\uFEFF/, '');
+    // Some providers do not include newlines. Insert newline before any #EXTINF to help parsing
+    t = t.replace(/(#EXTINF:[^\\n]*),/g,'$1,'); // noop to stabilize
+    // We'll parse by scanning for #EXTINF occurrences
+    const channels = [];
+    const warnings = [];
+    const extinfRe = /#EXTINF:([^\\n]*)\\n([^\\n]+)/g;
+    let match;
+    let idx = 0;
+    let lastProgress = 0;
+    // Using exec to iterate matches over the whole file
+    while ((match = extinfRe.exec(t)) !== null) {
+      idx++;
+      const rawMeta = match[1].trim();
+      const urlLine = match[2].trim();
+      // parse meta attributes and display name safely
+      const parsed = parseExtinf(rawMeta);
+      parsed.rawUrl = urlLine;
+      parsed.rawExtinf = rawMeta;
+      parsed.id = 'id_' + Math.random().toString(36).slice(2,9);
+      channels.push(parsed);
+      // progress every 500 items or by percent
+      if (idx % 500 === 0) {
+        const p = Math.min(99, Math.floor((match.index / t.length) * 100));
+        if (p !== lastProgress) { lastProgress = p; emitProgress(p); }
       }
+    }
+    // If no matches found, fallback to line-by-line split parse
+    if (channels.length === 0) {
+      // attempt to recover: split into lines but in worker this is ok
+      const lines = t.split('\\n');
+      let pending = null;
+      for (let i=0;i<lines.length;i++){
+        const l = lines[i].trim();
+        if (!l) continue;
+        if (l.startsWith('#EXTINF')) {
+          pending = { rawExtinf: l.slice(8) };
+          // keep entire metadata for main parser
+        } else if (!l.startsWith('#')) {
+          if (pending) {
+            const parsed = parseExtinf(pending.rawExtinf || '');
+            parsed.rawUrl = l;
+            parsed.rawExtinf = pending.rawExtinf || '';
+            parsed.id = 'id_' + Math.random().toString(36).slice(2,9);
+            channels.push(parsed);
+            pending = null;
+          } else {
+            // bare url
+            channels.push({ id:'id_'+Math.random().toString(36).slice(2,9), name: l, url: l, tvgId:'', tvgName:l, tvgLogo:'', rawExtinf:'', rawUrl:l });
+          }
+        }
+        if (i % 1000 === 0) emitProgress(Math.min(99, Math.floor((i/lines.length)*100)));
+      }
+    }
+    emitProgress(100);
+    self.postMessage({ type: 'done', channels: channels, warnings: warnings });
+  } catch (err) {
+    self.postMessage({ type: 'error', message: err.message || String(err) });
+  }
+}
+
+// Parses #EXTINF meta string (everything after the colon and before the newline)
+function parseExtinf(meta) {
+  // meta may be like: -1 tvg-id="abc" tvg-name="Name, Extra" tvg-logo="http://x",Display Name
+  // We need to extract attributes in quotes, then the display name which is after the last comma not in quotes
+  const res = { name:'', url:'', tvgId:'', tvgName:'', tvgLogo:'' };
+  // find quoted attributes
+  const attrRe = /([a-zA-Z0-9\\-]+)=\\s*"([^"]*)"/g;
+  let m;
+  while ((m = attrRe.exec(meta)) !== null) {
+    const k = m[1]; const v = m[2];
+    if (k.toLowerCase() === 'tvg-id') res.tvgId = v;
+    if (k.toLowerCase() === 'tvg-name') res.tvgName = v;
+    if (k.toLowerCase() === 'tvg-logo') res.tvgLogo = v;
+  }
+  // Now find display name: the part after the last comma that is not inside quotes
+  // We'll scan backwards to find the comma
+  let name = '';
+  let inQuotes = false;
+  for (let i = meta.length - 1; i >= 0; i--) {
+    const ch = meta[i];
+    if (ch === '"') inQuotes = !inQuotes;
+    if (ch === ',' && !inQuotes) {
+      name = meta.slice(i+1).trim();
+      break;
+    }
+    if (i === 0) name = meta.trim();
+  }
+  // fallback if still empty
+  if (!name) {
+    // try splitting by comma
+    const parts = meta.split(',');
+    name = parts.length ? parts[parts.length - 1].trim() : '';
+  }
+  res.name = name.replace(/^,\\s*/, '');
+  // if tvgName empty set it
+  if (!res.tvgName) res.tvgName = res.name;
+  return res;
+}
+
+`;
+
+// Create worker if possible
+let worker = null;
+try {
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const url = URL.createObjectURL(blob);
+  worker = new Worker(url);
+} catch(e) {
+  worker = null;
+}
+
+// Worker message handler
+if (worker) {
+  worker.onmessage = function(e){
+    const msg = e.data;
+    if (!msg) return;
+    if (msg.type === 'progress') {
+      updateProgress(msg.progress, 'Parsing...');
+    } else if (msg.type === 'done') {
+      updateProgress(100, 'Done parsing');
+      handleParsedChannels(msg.channels || [], msg.warnings || []);
+      worker && worker.terminate();
+    } else if (msg.type === 'error') {
+      updateProgress(0, 'Worker error');
+      console.warn('Worker error', msg.message);
+      worker && worker.terminate();
+      worker = null;
+      // fallback to streaming main thread
+      startStreamingParse(lastLoadedText);
+    }
+  };
+  worker.onerror = function(err){
+    console.warn('Worker onerror', err);
+    worker && worker.terminate();
+    worker = null;
+    updateProgress(0, 'Worker failed, falling back');
+    startStreamingParse(lastLoadedText);
+  };
+}
+
+// Keep last loaded text for fallback
+let lastLoadedText = '';
+
+function updateProgress(percent, text){
+  $('progressFill').style.width = percent + '%';
+  $('progressText').textContent = text + ' (' + percent + '%)';
+}
+
+// High level parse entry: decides to use worker or streaming
+async function parseM3UHybrid(text) {
+  // normalize BOM and whitespace
+  if (!text) return handleParsedChannels([], []);
+  lastLoadedText = text.replace(/^\uFEFF/, '');
+  // If worker available prefer it
+  if (worker) {
+    try {
+      updateProgress(1, 'Starting worker');
+      worker.postMessage({ cmd: 'parse', text: lastLoadedText });
+      return;
     } catch(e){
-      // ignore errors, continue
+      // fall through to streaming
+      worker && worker.terminate();
+      worker = null;
+      updateProgress(0, 'Worker unavailable, streaming parse');
+      await startStreamingParse(lastLoadedText);
+      return;
     }
+  } else {
+    await startStreamingParse(lastLoadedText);
   }
-  qs('#channelList').style.opacity = '';
-  alert('Auto logo fetch complete. Some channels may remain without logos due to missing matches or CORS.');
-  m3uEditor.value = buildM3UFromChannels();
-});
-
-// Guess iptv-org logo URL
-function guessIptvLogoUrl(name) {
-  if (!name) return null;
-  const s = name.toLowerCase().replace(/[^a-z0-9]/g,'');
-  if (!s) return null;
-  const first = s[0];
-  // iptv-org repo layout (this pattern works for many logos): https://github.com/iptv-org/iptv/tree/master/logos
-  return `https://raw.githubusercontent.com/iptv-org/iptv/master/logo/${first}/${s}.png`;
 }
 
-// image exists check
-async function imageExists(url) {
-  try {
-    const r = await fetch(url, { method: 'HEAD' });
-    if (r.ok) return true;
-    // some hosts block HEAD - try GET with small timeout
-    const r2 = await fetch(url);
-    return r2.ok && (r2.headers.get('content-type') || '').startsWith('image');
-  } catch(e) { return false; }
-}
-
-function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
-
-// Validate M3U
-validateBtn.addEventListener('click', () => {
-  const text = m3uEditor.value.trim() || m3uInput.value.trim();
-  if (!text) return alert('No M3U content to validate');
-  const result = validateM3U(text);
-  showValidation(result);
-});
-
-function validateM3U(text) {
-  const lines = text.split(/\r?\n/);
-  const result = { ok: true, errors: [], warnings: [], channelCount: 0 };
-  if (!lines[0] || !lines[0].includes('#EXTM3U')) {
-    result.ok = false;
-    result.errors.push('Missing #EXTM3U header at top of file');
-  }
-  let expectingUrl = false;
-  for (let i=0;i<lines.length;i++){
-    const l = lines[i].trim();
-    if (!l) continue;
-    if (l.startsWith('#EXTINF')) {
-      expectingUrl = true;
-    } else if (l.startsWith('#')) {
-      // other tag - ignore
+// Streaming chunked parser on main thread
+async function startStreamingParse(text) {
+  updateProgress(1, 'Streaming parse start');
+  const t = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/^\uFEFF/,'');
+  const len = t.length;
+  const CHUNK_SIZE = 64 * 1024; // 64KB chunks
+  let pos = 0;
+  let buffer = '';
+  const channels = [];
+  const warnings = [];
+  let processed = 0;
+  while (pos < len) {
+    const end = Math.min(len, pos + CHUNK_SIZE);
+    buffer += t.slice(pos, end);
+    // extract full lines from buffer
+    const lastNewline = buffer.lastIndexOf('\\n');
+    let work = buffer;
+    if (lastNewline !== -1) {
+      work = buffer.slice(0, lastNewline);
+      buffer = buffer.slice(lastNewline + 1);
     } else {
-      // url line
-      if (!isValidUrl(l)) {
-        result.warnings.push(`Line ${i+1}: URL may be invalid - ${l}`);
+      // no newline yet, if buffer too big, force process some
+      if (buffer.length > CHUNK_SIZE * 4) {
+        work = buffer.slice(0, CHUNK_SIZE);
+        buffer = buffer.slice(CHUNK_SIZE);
+      } else {
+        pos = end;
+        // yield to UI to stay responsive
+        await new Promise(requestAnimationFrame);
+        continue;
       }
-      if (expectingUrl) { result.channelCount++; expectingUrl = false; }
+    }
+    // parse work block by scanning for EXTINF occurrences
+    // This approach tolerates missing newlines by searching for "#EXTINF:"
+    const extinfRe = /#EXTINF:([\\s\\S]*?)(?:\\n|$)/g;
+    let localPending = null;
+    let m;
+    // We'll also generate an array of lines to handle non-standard structure
+    const lines = work.split('\\n');
+    for (let i=0;i<lines.length;i++) {
+      const line = lines[i];
+      if (!line) continue;
+      if (line.indexOf('#EXTINF') === 0) {
+        localPending = { rawExtinf: line.slice(8) };
+        // do not parse attributes now
+      } else if (line[0] === '#') {
+        // ignore other tags
+      } else {
+        if (localPending) {
+          const parsed = parseExtinfMain(localPending.rawExtinf);
+          parsed.rawUrl = line.trim();
+          parsed.rawExtinf = localPending.rawExtinf;
+          parsed.id = 'id_' + Math.random().toString(36).slice(2,9);
+          channels.push(parsed);
+          localPending = null;
+        } else {
+          // line without EXTINF - treat as bare url entry
+          channels.push({ id:'id_' + Math.random().toString(36).slice(2,9), name: line.trim(), url: line.trim(), tvgId:'', tvgName: line.trim(), tvgLogo:'', rawExtinf:'', rawUrl:line.trim() });
+        }
+      }
+    }
+
+    processed += work.length;
+    const percent = Math.floor((processed / len) * 100);
+    updateProgress(Math.min(99, percent), 'Parsing');
+    pos = end;
+    // yield to UI
+    await new Promise(requestAnimationFrame);
+  }
+
+  // handle any leftover buffer: attempt to parse final lines
+  if (buffer && buffer.length > 0) {
+    const lines = buffer.split('\\n');
+    let pending = null;
+    for (const line of lines) {
+      if (!line) continue;
+      if (line.indexOf('#EXTINF') === 0) pending = { rawExtinf: line.slice(8) };
+      else if (line[0] === '#') continue;
+      else {
+        if (pending) {
+          const parsed = parseExtinfMain(pending.rawExtinf);
+          parsed.rawUrl = line.trim();
+          parsed.rawExtinf = pending.rawExtinf;
+          parsed.id = 'id_' + Math.random().toString(36).slice(2,9);
+          channels.push(parsed); pending = null;
+        } else {
+          channels.push({ id:'id_' + Math.random().toString(36).slice(2,9), name: line.trim(), url: line.trim(), tvgId:'', tvgName: line.trim(), tvgLogo:'', rawExtinf:'', rawUrl:line.trim() });
+        }
+      }
     }
   }
-  if (expectingUrl) result.errors.push('Trailing #EXTINF without a following URL');
-  return result;
+
+  updateProgress(100, 'Done');
+  await new Promise(r => setTimeout(r, 120));
+  handleParsedChannels(channels, warnings);
 }
 
-function isValidUrl(s) {
-  try { new URL(s); return true; } catch(e) { return false; }
-}
-
-function showValidation(r) {
-  validatorResult.style.display = 'block';
-  validatorResult.innerHTML = '';
-  const h = document.createElement('div');
-  h.innerHTML = `<b>Channels found</b>: ${r.channelCount} &nbsp; <b>OK</b>: ${r.ok ? '<span class="good">yes</span>' : '<span class="bad">no</span>'}`;
-  validatorResult.appendChild(h);
-  if (r.errors && r.errors.length) {
-    const e = document.createElement('div'); e.innerHTML = '<b>Errors</b>:<br>' + r.errors.map(x=>escapeHtml(x)).join('<br>');
-    validatorResult.appendChild(e);
+// Main-thread EXTINF parser (safe)
+function parseExtinfMain(meta) {
+  const res = { name:'', url:'', tvgId:'', tvgName:'', tvgLogo:'' };
+  // extract quoted attributes robustly
+  // regex matches key="value" pairs even with commas inside
+  const attrRe = /([a-zA-Z0-9\\-]+)\\s*=\\s*"([^"]*)"/g;
+  let m;
+  while ((m = attrRe.exec(meta)) !== null) {
+    const k = m[1].toLowerCase(); const v = m[2];
+    if (k === 'tvg-id') res.tvgId = v;
+    if (k === 'tvg-name') res.tvgName = v;
+    if (k === 'tvg-logo') res.tvgLogo = v;
   }
-  if (r.warnings && r.warnings.length) {
-    const w = document.createElement('div'); w.innerHTML = '<b>Warnings</b>:<br>' + r.warnings.map(x=>escapeHtml(x)).join('<br>');
-    validatorResult.appendChild(w);
+  // Now extract display name: last comma not in quotes
+  let name = '';
+  let inQuotes = false;
+  for (let i = meta.length - 1; i >= 0; i--) {
+    const ch = meta[i];
+    if (ch === '"') inQuotes = !inQuotes;
+    if (ch === ',' && !inQuotes) {
+      name = meta.slice(i+1).trim();
+      break;
+    }
+    if (i === 0) name = meta.trim();
   }
-}
-
-// Build M3U from current state.channels
-function buildM3UFromChannels(includeLogos=true) {
-  let out = '#EXTM3U\n';
-  for (const ch of state.channels) {
-    const idAttr = ch.tvgId ? ` tvg-id="${escapeAttr(ch.tvgId)}"` : '';
-    const nameAttr = ch.tvgName ? ` tvg-name="${escapeAttr(ch.tvgName)}"` : '';
-    const logoAttr = (includeLogos && ch.tvgLogo) ? ` tvg-logo="${escapeAttr(ch.tvgLogo)}"` : '';
-    const ext = `#EXTINF:-1${idAttr}${nameAttr}${logoAttr},${(ch.name||'').replace(/\n/g,' ')}`;
-    out += ext + '\n' + (ch.url||'') + '\n';
+  if (!name) {
+    const parts = meta.split(',');
+    name = parts.length ? parts[parts.length - 1].trim() : '';
   }
-  return out;
-}
-function escapeAttr(s) { return (s||'').replace(/"/g,'&quot;'); }
-
-// Export M3U
-exportBtn.addEventListener('click', () => {
-  const txt = buildM3UFromChannels();
-  downloadText(txt, 'eggepg_playlist.m3u');
-});
-
-// Download utility
-function downloadText(text, filename) {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  res.name = name.replace(/^,\\s*/, '');
+  if (!res.tvgName) res.tvgName = res.name;
+  return res;
 }
 
-// Save/Load project buttons
-saveProjectBtn.addEventListener('click', () => {
-  const proj = {
-    channels: state.channels,
-    xmltv: state.xmltv,
-    settings: state.settings,
-    m3uText: m3uEditor.value || m3uInput.value || ''
-  };
-  try {
-    localStorage.setItem('eggepg_project', JSON.stringify(proj));
-    alert('Project saved to localStorage');
-  } catch(e) { alert('Save failed: ' + e.message); }
-});
-loadProjectBtn.addEventListener('click', () => {
-  const raw = localStorage.getItem('eggepg_project');
-  if (!raw) return alert('No saved project in localStorage');
-  try {
-    const proj = JSON.parse(raw);
-    state.channels = proj.channels || [];
-    state.xmltv = proj.xmltv || {channels:[], loaded:false};
-    state.settings = proj.settings || state.settings;
-    if (proj.m3uText) { m3uEditor.value = proj.m3uText; m3uInput.value = proj.m3uText; }
-    renderChannelList();
-    alert('Project loaded');
-  } catch(e) { alert('Load failed: ' + e.message); }
-});
-clearProjectBtn.addEventListener('click', () => {
-  if (!confirm('Clear local project and localStorage?')) return;
-  state.channels = []; state.xmltv = {channels:[], loaded:false}; state.settings = {theme:'light'};
-  localStorage.removeItem('eggepg_project');
-  m3uInput.value = ''; m3uEditor.value = '';
-  document.body.setAttribute('data-theme', 'light');
-  toggleThemeBtn.textContent = 'Dark';
-  renderChannelList();
-});
+// Called when parsed channels are ready
+function handleParsedChannels(channels, warnings) {
+  S.channels = channels.map(c => {
+    return {
+      id: c.id || ('id_' + Math.random().toString(36).slice(2,9)),
+      name: c.name || c.tvgName || c.rawUrl || 'Unknown',
+      url: c.rawUrl || c.url || '',
+      tvgId: c.tvgId || '',
+      tvgName: c.tvgName || c.name || '',
+      tvgLogo: c.tvgLogo || '',
+      rawExtinf: c.rawExtinf || '',
+      rawUrl: c.rawUrl || '',
+      matchSource: c.matchSource || '',
+      matchConfidence: c.matchConfidence || 0
+    };
+  });
+  renderChannels();
+  $('progressFill').style.width = '0%';
+  $('progressText').textContent = 'Idle';
+  if (warnings && warnings.length) showModal('<div><b>Warnings</b><div style="margin-top:8px">' + warnings.map(w=>escapeHtml(w)).join('<br>') + '</div><div style="margin-top:8px" class="row"><button id="closew" class="btn smallbtn">Close</button></div></div>');
+  const closew = document.getElementById('closew'); if (closew) closew.addEventListener('click', closeModal);
+}
 
-// Export/import project JSON
-exportProjectBtn.addEventListener('click', () => {
-  const proj = { channels: state.channels, xmltv: state.xmltv, settings: state.settings };
-  downloadText(JSON.stringify(proj, null, 2), 'eggepg_project.json');
-});
-importProjectBtn.addEventListener('click', () => projFile.click());
-projFile.addEventListener('change', (e) => {
-  const f = e.target.files[0]; if (!f) return;
+// UI interactions wiring
+els.btnLoadFile.addEventListener('click', ()=> {
+  const f = els.fileM3U.files[0];
+  if (!f) return showStatus('Choose an M3U file first', true);
   const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const proj = JSON.parse(ev.target.result);
-      if (!proj) return alert('Invalid project file');
-      state.channels = proj.channels || [];
-      state.xmltv = proj.xmltv || {channels:[],loaded:false};
-      state.settings = proj.settings || state.settings;
-      renderChannelList();
-      alert('Project imported');
-    } catch(err){ alert('Import failed: ' + err.message); }
+  reader.onload = e => {
+    const text = e.target.result;
+    els.m3uInput.value = text;
+    els.m3uEditor.value = text;
+    parseM3UHybrid(text);
   };
+  // read as text - large files ok because worker handles heavy lifting
   reader.readAsText(f);
 });
 
-// XMLTV load and auto-matching
-loadXmlBtn.addEventListener('click', () => {
-  const f = fileXml.files[0]; if (!f) return alert('Choose an XMLTV file first');
-  const r = new FileReader();
-  r.onload = (e) => {
+els.btnPasteToEditor.addEventListener('click', ()=> {
+  if (!els.m3uInput.value.trim()) return showStatus('Paste M3U text into the input first', true);
+  els.m3uEditor.value = els.m3uInput.value;
+  parseM3UHybrid(els.m3uInput.value);
+});
+
+// parse from editor or input
+els.btnParse.addEventListener('click', ()=> {
+  const txt = els.m3uEditor.value.trim() || els.m3uInput.value.trim();
+  if (!txt) return showStatus('No M3U text to parse', true);
+  parseM3UHybrid(txt);
+});
+
+// validate
+els.btnValidate.addEventListener('click', ()=> {
+  const txt = els.m3uEditor.value.trim() || els.m3uInput.value.trim();
+  if (!txt) return showStatus('No M3U to validate', true);
+  const res = validateM3U(txt);
+  displayValidation(res);
+});
+
+// auto logos
+els.btnAutoLogos.addEventListener('click', async ()=> {
+  if (!S.channels.length) return showStatus('No channels loaded', true);
+  showStatus('Starting logo fetch (iptv-org + tvmaze fallback)');
+  for (let i=0;i<S.channels.length;i++) {
+    const ch = S.channels[i];
+    if (ch.tvgLogo && ch.tvgLogo.trim()) continue;
+    const guess = guessIptvLogoUrl(ch.name);
+    if (guess && await imageExists(guess)) { ch.tvgLogo = guess; renderChannels(); await sleep(120); continue; }
+    // try clearbit
     try {
-      const txt = e.target.result;
-      // parse XML: we read channel display-name and id
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(txt, 'application/xml');
-      const chNodes = doc.getElementsByTagName('channel');
-      const list = [];
-      for (let i=0;i<chNodes.length;i++){
-        const node = chNodes[i];
-        const id = node.getAttribute('id') || '';
-        const dn = node.getElementsByTagName('display-name')[0];
-        const name = dn ? (dn.textContent || '') : '';
-        list.push({ id, name });
+      const u = new URL(ch.url);
+      const cb = 'https://logo.clearbit.com/' + u.hostname;
+      if (await imageExists(cb)) { ch.tvgLogo = cb; renderChannels(); await sleep(120); continue; }
+    } catch(e){}
+    // tvmaze fallback
+    try {
+      const q = encodeURIComponent(ch.name.replace(/\\(.+\\)/,'').replace(/[^a-z0-9 ]/ig,' ').trim());
+      if (!q) continue;
+      const api = 'https://api.tvmaze.com/search/shows?q=' + q;
+      const r = await fetch(api);
+      if (!r.ok) { await sleep(120); continue; }
+      const js = await r.json();
+      if (Array.isArray(js) && js.length > 0) {
+        const show = js[0].show;
+        const logo = (show.image && (show.image.original || show.image.medium)) || '';
+        if (logo) { ch.tvgLogo = logo; renderChannels(); await sleep(200); continue; }
       }
-      state.xmltv.channels = list;
-      state.xmltv.loaded = true;
-      xmlInfo.textContent = 'Loaded XMLTV with ' + list.length + ' channels';
-    } catch(err){
-      xmlInfo.textContent = 'XML parse error: ' + err.message;
-    }
+    } catch(e){}
+  }
+  showStatus('Logo fetch finished');
+  els.m3uEditor.value = buildM3U();
+});
+
+// load XMLTV
+els.btnLoadXML.addEventListener('click', ()=> {
+  const f = els.fileXML.files[0];
+  if (!f) return showStatus('Choose an XMLTV file first', true);
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const xml = e.target.result;
+      const doc = (new DOMParser()).parseFromString(xml, 'application/xml');
+      const chNodes = doc.getElementsByTagName('channel');
+      const arr = [];
+      for (let i=0;i<chNodes.length;i++){
+        const n = chNodes[i];
+        const id = n.getAttribute('id') || '';
+        const dn = n.getElementsByTagName('display-name')[0];
+        const name = dn ? (dn.textContent || '') : '';
+        arr.push({ id, name });
+      }
+      S.xmltv.channels = arr; S.xmltv.loaded = true;
+      els.xmlStatus.textContent = 'Loaded XMLTV channels: ' + arr.length;
+      showStatus('XMLTV loaded');
+    } catch(err) { els.xmlStatus.textContent = 'XML parse failed'; showStatus('XMLTV parse failed', true); }
   };
   r.readAsText(f);
 });
 
-// fuzzy matching: simple scoring by string similarity
-autoMatchBtn.addEventListener('click', () => {
-  if (!state.xmltv.loaded) return alert('Load an XMLTV file first');
-  let matched = 0;
-  for (const ch of state.channels) {
-    if (ch.tvgId && ch.tvgId.trim() !== '') continue; // skip already has id
-    // compute best match
-    let best = {score: -1, id: ''};
-    for (const x of state.xmltv.channels) {
-      const s = similarity(normalizeName(ch.name), normalizeName(x.name || x.id || ''));
-      if (s > best.score) { best.score = s; best.id = x.id; }
+// auto match combined algorithm (name + logo heuristic) C
+els.btnAutoMatch.addEventListener('click', ()=> {
+  if (!S.xmltv.loaded) return showStatus('Load an XMLTV file first', true);
+  if (!S.channels.length) return showStatus('No channels loaded', true);
+  const matches = [];
+  for (let i=0;i<S.channels.length;i++){
+    const ch = S.channels[i];
+    if (ch.tvgId && ch.tvgId.trim()) continue;
+    const a = normalize(ch.name);
+    let best = {score:0, id:'', source:''};
+    for (const x of S.xmltv.channels) {
+      const b = normalize(x.name || x.id || '');
+      const s = tokenSimilarity(a,b);
+      if (s > best.score) best = {score:s, id:x.id, source:'name'};
     }
-    // threshold 0.45 to be safe
-    if (best.score >= 0.45) {
-      ch.tvgId = best.id;
-      ch.tvgName = ch.tvgName || ''; // keep display name as is
-      matched++;
+    const guess = guessIptvLogoFilename(ch.name);
+    if (guess) {
+      for (const x of S.xmltv.channels) {
+        const b = normalize(x.name || x.id || '');
+        const s2 = tokenSimilarity(b, guess) * 0.9 + 0.1;
+        if (s2 > best.score) best = {score:s2, id:x.id, source:'logo'};
+      }
+    }
+    const CONF = 0.45;
+    if (best.score >= CONF) {
+      ch.tvgId = best.id; ch.matchConfidence = best.score; ch.matchSource = best.source;
+      matches.push({ channel: ch.name, to: best.id, score: best.score, source: best.source });
+    } else {
+      ch.matchConfidence = best.score; ch.matchSource = best.source;
     }
   }
-  renderChannelList();
-  alert('Auto match complete. Matched ' + matched + ' channels.');
-  m3uEditor.value = buildM3UFromChannels();
+  renderChannels();
+  els.m3uEditor.value = buildM3U();
+  showStatus('Auto match complete');
+  showMatchesModal(matches);
 });
 
-// normalize names
-function normalizeName(s) {
-  if (!s) return '';
-  return s.toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
-}
+// generate missing ids
+els.btnGenerateIds.addEventListener('click', ()=> {
+  let count = 0;
+  for (const ch of S.channels) {
+    if (!ch.tvgId || ch.tvgId.trim() === '') { ch.tvgId = slugify(ch.name); count++; }
+  }
+  renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Generated ' + count + ' ids');
+});
 
-// simple normalized string similarity (Jaccard-ish on tokens)
-function similarity(a,b){
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  const ta = a.split(/\s+/); const tb = b.split(/\s+/);
-  const setA = new Set(ta); const setB = new Set(tb);
-  const intersection = [...setA].filter(x=>setB.has(x)).length;
-  const union = new Set([...ta,...tb]).size;
-  return union === 0 ? 0 : intersection / union;
-}
+// remove duplicates
+els.btnRemoveDup.addEventListener('click', ()=> {
+  const seen = new Set(); const out = [];
+  for (const ch of S.channels) {
+    const key = ((ch.tvgId || ch.name || ch.url) || '').toLowerCase();
+    if (seen.has(key)) continue; seen.add(key); out.push(ch);
+  }
+  const removed = S.channels.length - out.length; S.channels = out; renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Removed ' + removed + ' duplicates');
+});
 
-// Xtream builder
-buildXtreamBtn.addEventListener('click', () => {
-  const host = xcHost.value.trim();
-  const user = xcUser.value.trim();
-  const pass = xcPass.value.trim();
-  if (!host || !user || !pass) { xtreamOut.textContent = 'Fill host, username, password'; return; }
+// export m3u
+els.btnExport.addEventListener('click', ()=> {
+  const txt = buildM3U(); downloadText(txt, 'eggepg_playlist.m3u'); showStatus('Exported M3U');
+});
+
+// xtream builder
+els.btnBuildXtream.addEventListener('click', ()=> {
+  const host = els.xcHost.value.trim(), user = els.xcUser.value.trim(), pass = els.xcPass.value.trim();
+  if (!host || !user || !pass) return showStatus('Fill host, username and password', true);
   const h = host.endsWith('/') ? host.slice(0,-1) : host;
-  const url = `${h}/get.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&type=m3u_plus&output=ts`;
-  xtreamOut.textContent = url;
+  const url = h + '/get.php?username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) + '&type=m3u_plus&output=ts';
+  els.xtreamOut.textContent = url;
+});
+els.btnBuildTemplate.addEventListener('click', ()=> {
+  const url = els.xtreamOut.textContent.trim(); if (!url) return showStatus('Build Xtream URL first', true);
+  const template = '#EXTM3U\\n#EXTINF:-1, Xtream Playlist\\n' + url + '\\n';
+  els.m3uEditor.value = template; parseM3UHybrid(template); showStatus('Xtream template inserted');
 });
 
-buildXtreamM3UBtn.addEventListener('click', () => {
-  const url = (xtreamOut.textContent || '').trim();
-  if (!url) { alert('Generate Xtream URL first'); return; }
-  const sample = '#EXTM3U\n#EXTINF:-1,My Xtream Playlist\n' + url + '\n';
-  m3uEditor.value = sample;
-  parseM3UText(sample);
+// project export/import
+els.btnExportProject.addEventListener('click', ()=> {
+  const proj = { channels: S.channels, xmltv: S.xmltv, settings: S.settings };
+  downloadText(JSON.stringify(proj, null, 2), 'eggepg_project.json');
+});
+els.btnImportProject.addEventListener('click', ()=> els.importFile.click());
+els.importFile.addEventListener('change', (e)=> {
+  const f = e.target.files[0]; if (!f) return; const r = new FileReader();
+  r.onload = ev => { try { const obj = JSON.parse(ev.target.result); S.channels = obj.channels || []; S.xmltv = obj.xmltv || {channels:[], loaded:false}; S.settings = obj.settings || S.settings; renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Project imported'); } catch(err){ showStatus('Import failed', true); } };
+  r.readAsText(f);
 });
 
-// Toggle theme
-toggleThemeBtn.addEventListener('click', () => {
-  state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark';
-  document.body.setAttribute('data-theme', state.settings.theme);
-  toggleThemeBtn.textContent = state.settings.theme === 'dark' ? 'Light' : 'Dark';
-  try { localStorage.setItem('eggepg_theme', state.settings.theme); } catch(e){}
+// save/load/reset project
+$('saveProject').addEventListener('click', ()=> {
+  try { const proj = { channels: S.channels, xmltv: S.xmltv, settings: S.settings, editor: els.m3uEditor.value || els.m3uInput.value || '' }; localStorage.setItem('eggepg_project_saved', JSON.stringify(proj)); showStatus('Project saved'); } catch(e){ showStatus('Save failed', true); }
+});
+$('loadProject').addEventListener('click', ()=> {
+  try { const raw = localStorage.getItem('eggepg_project_saved'); if (!raw) return showStatus('No saved project', true); const proj = JSON.parse(raw); S.channels = proj.channels || []; S.xmltv = proj.xmltv || {channels:[],loaded:false}; S.settings = proj.settings || S.settings; if (proj.editor) { els.m3uEditor.value = proj.editor; els.m3uInput.value = proj.editor; } renderChannels(); showStatus('Project loaded'); } catch(e){ showStatus('Load failed', true); }
+});
+$('resetProject').addEventListener('click', ()=> {
+  showConfirm('Reset project', 'Reset will clear channels and settings in this browser. Continue?', ()=> {
+    S.channels = []; S.xmltv = {channels:[],loaded:false}; S.settings = { theme:'light' }; localStorage.removeItem('eggepg_project_saved'); localStorage.removeItem('eggepg_autosave'); els.m3uEditor.value = ''; els.m3uInput.value = ''; renderChannels(); showStatus('Project reset');
+  });
 });
 
-// Utility: build M3U when export or to editor
-function buildM3UFromChannels() {
-  return buildM3UFromChannelsWithOptions(true);
-}
-function buildM3UFromChannelsWithOptions(includeLogos) {
-  let out = '#EXTM3U\n';
-  for (const ch of state.channels) {
-    const idAttr = ch.tvgId ? ` tvg-id="${escapeAttr(ch.tvgId)}"` : '';
-    const nameAttr = ch.tvgName ? ` tvg-name="${escapeAttr(ch.tvgName)}"` : '';
-    const logoAttr = (includeLogos && ch.tvgLogo) ? ` tvg-logo="${escapeAttr(ch.tvgLogo)}"` : '';
-    const ext = `#EXTINF:-1${idAttr}${nameAttr}${logoAttr},${(ch.name||'').replace(/\n/g,' ')}`;
-    out += ext + '\n' + (ch.url||'') + '\n';
-  }
-  return out;
-}
-function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
-
-// Validation quick check: we reuse validateM3U above
-function basicValidationAndShow() {
-  const text = m3uEditor.value.trim() || m3uInput.value.trim();
-  if (!text) return alert('No M3U to validate');
-  const res = validateM3U(text);
-  validatorResult.style.display = 'block';
-  let html = `<div><b>Channels</b>: ${res.channelCount} &nbsp; <b>OK</b>: ${res.ok ? 'yes' : 'no'}</div>`;
-  if (res.errors.length) html += '<div style="color:#b91c1c"><b>Errors</b>:<br>' + res.errors.map(e=>escapeHtml(e)).join('<br>') + '</div>';
-  if (res.warnings.length) html += '<div style="color:#92400e"><b>Warnings</b>:<br>' + res.warnings.map(e=>escapeHtml(e)).join('<br>') + '</div>';
-  validatorResult.innerHTML = html;
-}
-
-// Wire validate button
-validateBtn.addEventListener('click', basicValidationAndShow);
-
-// Update counts
-function updateCounts() {
-  chanCount.textContent = String(state.channels.length || 0);
-}
-
-// When channel list changes, sync editor text
-function syncEditorFromState() {
-  m3uEditor.value = buildM3UFromChannels();
-}
-
-// Some helper to set m3uEditor from state
-m3uEditor.addEventListener('change', () => {
-  // when user edits text manually, re-parse if they ask to
+// theme toggle
+els.toggleTheme.addEventListener('click', ()=> {
+  S.settings.theme = S.settings.theme === 'dark' ? 'light' : 'dark';
+  document.body.setAttribute('data-theme', S.settings.theme);
+  els.toggleTheme.textContent = S.settings.theme === 'dark' ? 'Light' : 'Dark';
+  try { localStorage.setItem('eggepg_theme', S.settings.theme); } catch(e){}
 });
 
-// Utility functions
-function downloadTextFile(text, name) {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
-}
+// Utilities
+function slugify(s) { if (!s) return ''; return s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,64); }
+function normalize(s){ return (s||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
+function tokenSimilarity(a,b){ if (!a || !b) return 0; const A=new Set(a.split(/\\s+/)); const B=new Set(b.split(/\\s+/)); let inter=0; A.forEach(x=>{ if (B.has(x)) inter++; }); const union = new Set([...a.split(/\\s+/), ...b.split(/\\s+/)]).size || 1; return inter/union; }
+function escapeHtml(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+function downloadText(text, name){ const blob = new Blob([text], { type: 'text/plain;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500); }
 
-// XMlTV mapping guidance: if user has xmltv loaded, we already added auto match
-// Additional UX: when user clicks parse, also update editor
-exportBtn.addEventListener('click', () => {
-  syncEditorFromState();
-  downloadTextFile(m3uEditor.value, 'eggepg_playlist.m3u');
-});
-
-// small helper for image fetch check - used earlier
-async function imageExistsFast(url) {
-  try {
-    const r = await fetch(url, { method: 'HEAD' });
-    return r.ok;
-  } catch(e) {
-    try { const r2 = await fetch(url); return r2.ok && (r2.headers.get('content-type')||'').startsWith('image'); } catch(e2) { return false; }
-  }
-}
-
-// Basic M3U validator reused by CLI and UI
+// validate M3U
 function validateM3U(text) {
-  const lines = text.split(/\r?\n/);
-  const result = { ok: true, errors: [], warnings: [], channelCount: 0 };
-  if (!lines[0] || !lines[0].includes('#EXTM3U')) {
-    result.ok = false;
-    result.errors.push('Missing #EXTM3U header');
-  }
+  const lines = text.split(/\\r?\\n/);
+  const result = { ok:true, errors:[], warnings:[], channelCount:0 };
+  if (!lines[0] || !lines[0].includes('#EXTM3U')) { result.ok = false; result.errors.push('Missing #EXTM3U header'); }
   let expectUrl = false;
   for (let i=0;i<lines.length;i++){
-    const l = lines[i].trim();
-    if (!l) continue;
+    const l = lines[i].trim(); if (!l) continue;
     if (l.startsWith('#EXTINF')) { expectUrl = true; }
     else if (l.startsWith('#')) { /* ignore */ }
     else {
-      // url line
       if (expectUrl) { result.channelCount++; expectUrl = false; }
       if (!isValidUrl(l)) result.warnings.push('Possibly invalid URL at line ' + (i+1) + ': ' + l);
     }
@@ -878,50 +792,130 @@ function validateM3U(text) {
   if (result.errors.length) result.ok = false;
   return result;
 }
+function isValidUrl(s){ try { new URL(s); return true; } catch(e) { return false; } }
 
-function isValidUrl(s) {
-  try { new URL(s); return true; } catch(e) { return false; }
+// EXTINF parsing helper for worker string not available here
+function parseExtinfMain(meta) {
+  const res = { name:'', url:'', tvgId:'', tvgName:'', tvgLogo:'' };
+  const attrRe = /([a-zA-Z0-9\\-]+)\\s*=\\s*"([^"]*)"/g;
+  let m;
+  while ((m = attrRe.exec(meta)) !== null) {
+    const k = m[1].toLowerCase(); const v = m[2];
+    if (k === 'tvg-id') res.tvgId = v;
+    if (k === 'tvg-name') res.tvgName = v;
+    if (k === 'tvg-logo') res.tvgLogo = v;
+  }
+  let name = '';
+  let inQuotes = false;
+  for (let i = meta.length - 1; i >= 0; i--) {
+    const ch = meta[i];
+    if (ch === '"') inQuotes = !inQuotes;
+    if (ch === ',' && !inQuotes) { name = meta.slice(i+1).trim(); break; }
+    if (i === 0) name = meta.trim();
+  }
+  if (!name) {
+    const parts = meta.split(',');
+    name = parts.length ? parts[parts.length - 1].trim() : '';
+  }
+  res.name = name.replace(/^,\\s*/, '');
+  if (!res.tvgName) res.tvgName = res.name;
+  return res;
 }
 
-// when user parsed M3U earlier we already fill state.channels; sync editor clicking parse uses function
-function parseM3UFromEditor() {
-  const txt = m3uEditor.value.trim();
-  if (!txt) return;
-  parseM3UText(txt);
+// Build M3U from S.channels
+function buildM3U() {
+  let out = '#EXTM3U\\n';
+  for (const ch of S.channels) {
+    const idAttr = ch.tvgId ? ' tvg-id=\"' + escapeAttr(ch.tvgId) + '\"' : '';
+    const nameAttr = ch.tvgName ? ' tvg-name=\"' + escapeAttr(ch.tvgName) + '\"' : '';
+    const logoAttr = ch.tvgLogo ? ' tvg-logo=\"' + escapeAttr(ch.tvgLogo) + '\"' : '';
+    out += '#EXTINF:-1' + idAttr + nameAttr + logoAttr + ',' + (ch.name || '') + '\\n' + (ch.url || '') + '\\n';
+  }
+  return out;
+}
+function escapeAttr(s){ return (s||'').replace(/\"/g,'&quot;'); }
+
+// Render channels UI
+function renderChannels() {
+  const box = els.channelList; box.innerHTML = '';
+  if (!S.channels || S.channels.length === 0) { box.innerHTML = '<div class=\"muted\">No channels loaded. Parse a playlist to see them here.</div>'; els.count.textContent = '0'; return; }
+  for (let i=0;i<S.channels.length;i++){
+    const ch = S.channels[i];
+    const el = document.createElement('div'); el.className = 'channel'; el.draggable = true; el.dataset.index = i;
+    const img = document.createElement('img'); img.className = 'thumb'; img.src = ch.tvgLogo || ''; img.alt = ''; img.onerror = function(){ this.style.visibility = 'hidden'; };
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.innerHTML = '<b title=\"'+escapeHtml(ch.name)+'\">' + escapeHtml(ch.name) + '</b>' +
+      '<div class=\"muted\">tvg-id: <span class=\"code\">' + escapeHtml(ch.tvgId || '') + '</span></div>' +
+      '<div class=\"muted\">url: <span class=\"code\">' + escapeHtml(shorten(ch.url || '')) + '</span></div>' +
+      '<div class=\"muted\">match: <span class=\"code\">' + (ch.matchSource || '') + (ch.matchConfidence ? ' (' + Math.round(ch.matchConfidence*100) + '%)':'') + '</span></div>';
+    const controls = document.createElement('div'); controls.style.display='flex'; controls.style.gap='6px';
+    const editBtn = document.createElement('button'); editBtn.className='smallbtn'; editBtn.textContent='Edit';
+    const logoBtn = document.createElement('button'); logoBtn.className='smallbtn ghost'; logoBtn.textContent='Logo';
+    const topBtn = document.createElement('button'); topBtn.className='smallbtn ghost'; topBtn.textContent='Top';
+    controls.appendChild(editBtn); controls.appendChild(logoBtn); controls.appendChild(topBtn);
+    editBtn.addEventListener('click', ()=> editChannel(i)); logoBtn.addEventListener('click', ()=> setLogoInline(i)); topBtn.addEventListener('click', ()=> moveToTop(i));
+    // drag handlers
+    el.addEventListener('dragstart', (e)=> { e.dataTransfer.setData('text/plain', i); e.currentTarget.style.opacity = '0.6'; });
+    el.addEventListener('dragend', (e)=> { e.currentTarget.style.opacity = ''; });
+    el.addEventListener('dragover', (e)=> { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    el.addEventListener('drop', (e)=> { e.preventDefault(); const from = Number(e.dataTransfer.getData('text/plain')); const to = Number(el.dataset.index); reorderChannels(from, to); });
+    el.appendChild(img); el.appendChild(meta); el.appendChild(controls); box.appendChild(el);
+  }
+  els.count.textContent = String(S.channels.length);
 }
 
-// When user edits channels via UI, update m3uEditor
-function renderAndSync() {
-  renderChannelList();
-  m3uEditor.value = buildM3UFromChannels();
-}
+// small helpers
+function shorten(u){ try { const _ = new URL(u); return _.hostname + _.pathname; } catch(e){ return (u||'').slice(0,60); } }
+function editChannel(idx){ const ch = S.channels[idx]; const node = document.createElement('div'); node.innerHTML = '<div><b>Edit channel</b></div><div style=\"margin-top:8px\">Name</div><div><input id=\"ech_name\" class=\"input\" value=\"'+escapeHtml(ch.name)+'\"></div><div style=\"margin-top:8px\">tvg-id</div><div><input id=\"ech_id\" class=\"input\" value=\"'+escapeHtml(ch.tvgId)+'\"></div><div style=\"margin-top:8px\">tvg-logo</div><div><input id=\"ech_logo\" class=\"input\" value=\"'+escapeHtml(ch.tvgLogo)+'\"></div><div style=\"margin-top:8px\" class=\"row\"><button id=\"ech_save\" class=\"btn smallbtn\">Save</button><button id=\"ech_cancel\" class=\"btn smallbtn ghost\">Cancel</button></div>'; showModal(node); document.getElementById('ech_cancel').addEventListener('click', closeModal); document.getElementById('ech_save').addEventListener('click', ()=> { ch.name = document.getElementById('ech_name').value.trim() || ch.name; ch.tvgId = document.getElementById('ech_id').value.trim() || ch.tvgId; ch.tvgLogo = document.getElementById('ech_logo').value.trim() || ch.tvgLogo; closeModal(); renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Channel saved'); }); }
+function setLogoInline(idx){ const ch = S.channels[idx]; const node = document.createElement('div'); node.innerHTML = '<div><b>Set logo for '+escapeHtml(ch.name)+'</b></div><div style=\"margin-top:8px\"><input id=\"logo_url\" class=\"input\" placeholder=\"https://...\" value=\"'+escapeHtml(ch.tvgLogo||'')+'\"></div><div style=\"margin-top:8px\" class=\"row\"><button id=\"logo_save\" class=\"btn smallbtn\">Save</button><button id=\"logo_clear\" class=\"btn smallbtn ghost\">Clear</button></div>'; showModal(node); document.getElementById('logo_clear').addEventListener('click', ()=> { ch.tvgLogo=''; closeModal(); renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Logo cleared'); }); document.getElementById('logo_save').addEventListener('click', ()=> { ch.tvgLogo = document.getElementById('logo_url').value.trim(); closeModal(); renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Logo saved'); }); }
+function moveToTop(i){ const it = S.channels.splice(i,1)[0]; S.channels.unshift(it); renderChannels(); els.m3uEditor.value = buildM3U(); }
+function reorderChannels(from,to){ if (from===to) return; const it = S.channels.splice(from,1)[0]; S.channels.splice(to,0,it); renderChannels(); els.m3uEditor.value = buildM3U(); }
 
-// initial render call for any preloaded state
-renderChannelList();
+// modal
+const modalRoot = document.getElementById('modalRoot');
+function showModal(node){ modalRoot.innerHTML = ''; modalRoot.classList.remove('hidden'); const backdrop = document.createElement('div'); backdrop.className='modal-backdrop'; const modal = document.createElement('div'); modal.className='modal'; if (typeof node === 'string') modal.innerHTML = node; else modal.appendChild(node); backdrop.appendChild(modal); modalRoot.appendChild(backdrop); backdrop.addEventListener('click', (e)=> { if (e.target === backdrop) closeModal(); }); }
+function closeModal(){ modalRoot.innerHTML = ''; modalRoot.classList.add('hidden'); }
+function showConfirm(title, message, onConfirm){ const node = document.createElement('div'); node.innerHTML = '<div><b>'+escapeHtml(title)+'</b></div><div style=\"margin-top:8px\">'+escapeHtml(message)+'</div><div style=\"margin-top:12px\" class=\"row\"><button id=\"confirmYes\" class=\"btn smallbtn\">Yes</button><button id=\"confirmNo\" class=\"btn smallbtn ghost\">No</button></div>'; showModal(node); document.getElementById('confirmNo').addEventListener('click', closeModal); document.getElementById('confirmYes').addEventListener('click', ()=> { closeModal(); onConfirm(); }); }
 
-// Hook parse button to parse from editor on demand
-qs('#parseBtn').addEventListener('click', () => parseM3UFromEditor());
+// matches modal
+function showMatchesModal(matches){ const node = document.createElement('div'); let html = '<div><b>Auto matches</b></div><div style=\"margin-top:8px\">'; if (!matches || matches.length === 0) html += '<div class=\"muted\">No high confidence matches were auto assigned.</div>'; else { html += '<div class=\"muted\">Assigned '+matches.length+' matches. Review below.</div><div style=\"margin-top:8px\">'; matches.slice(0,200).forEach((m,idx)=> { html += '<div style=\"padding:6px;border-bottom:1px solid #f1f5f9\"><div><b>'+escapeHtml(m.channel)+'</b> &rarr; <span class=\"code\">'+escapeHtml(m.to)+'</span> <span class=\"muted\">('+Math.round(m.score*100)+'% via '+escapeHtml(m.source)+')</span></div><div style=\"margin-top:6px\" class=\"row\"><button data-idx=\"'+idx+'\" class=\"approve smallbtn\">Keep</button><button data-idx=\"'+idx+'\" class=\"revert smallbtn ghost\">Revert</button></div></div>'; }); html += '</div>'; } node.innerHTML = html + '<div style=\"margin-top:12px\" class=\"row\"><button id=\"closeMatches\" class=\"btn smallbtn\">Close</button></div>'; showModal(node); document.getElementById('closeMatches').addEventListener('click', closeModal); const approves = document.querySelectorAll('.approve'); approves.forEach(b=>b.addEventListener('click', ()=> { closeModal(); renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Match kept'); })); const reverts = document.querySelectorAll('.revert'); reverts.forEach(b=>b.addEventListener('click', (e)=> { const idx = Number(e.target.getAttribute('data-idx')); const m = matches[idx]; const ch = S.channels.find(c=>c.name === m.channel); if (ch) { ch.tvgId=''; ch.matchConfidence=0; ch.matchSource=''; renderChannels(); els.m3uEditor.value = buildM3U(); showStatus('Match reverted'); } })); }
 
-// Hook generate ids to update and sync
-generateIdsBtn.addEventListener('click', () => { m3uEditor.value = buildM3UFromChannels(); });
+// imageExists
+async function imageExists(url){ try { const r = await fetch(url, { method:'HEAD' }); if (r.ok) return true; const r2 = await fetch(url); return r2.ok && (r2.headers.get('content-type') || '').startsWith('image'); } catch(e) { return false; } }
 
-// Auto-match note: mapping uses simple token similarity
-function autoMatchEPGIDs() {
-  if (!state.xmltv.loaded) return alert('Load an XMLTV file first');
-  autoMatchBtn.click();
-}
+// guess iptv-org url
+function guessIptvLogoFilename(name){ if (!name) return ''; return name.toLowerCase().replace(/[^a-z0-9]/g,''); }
+function guessIptvLogoUrl(name){ const s = guessIptvLogoFilename(name); if (!s) return null; const first = s[0] || '0'; return 'https://raw.githubusercontent.com/iptv-org/iptv/master/logo/'+first+'/'+s+'.png'; }
 
-// Finally expose some debug controls for console use
-window.EggEPG = {
-  state,
-  parseM3UText,
-  buildM3UFromChannels,
-  renderChannelList,
-  validateM3U,
-  autoMatchEPGIDs
-};
+// validate display
+function displayValidation(res){ els.validatorBox.style.display='block'; let html = '<div><b>Channels</b>: '+res.channelCount+' &nbsp; <b>OK</b>: '+(res.ok ? '<span class=\"good\">yes</span>' : '<span class=\"bad\">no</span>')+'</div>'; if (res.errors.length) html += '<div class=\"bad\"><b>Errors</b>:<br>'+res.errors.map(e=>escapeHtml(e)).join('<br>')+'</div>'; if (res.warnings.length) html += '<div class=\"muted\"><b>Warnings</b>:<br>'+res.warnings.map(e=>escapeHtml(e)).join('<br>')+'</div>'; els.validatorBox.innerHTML = html; }
 
-})();
+// helper functions for parsing
+function slugify(s){ if (!s) return ''; return s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,64); }
+function normalize(s){ return (s||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
+function tokenSimilarity(a,b){ if (!a || !b) return 0; const A=new Set(a.split(/\\s+/)); const B=new Set(b.split(/\\s+/)); let inter=0; A.forEach(x=>{ if (B.has(x)) inter++; }); const union = new Set([...a.split(/\\s+/),...b.split(/\\s+/)]).size || 1; return inter/union; }
+function escapeAttr(s){ return (s||'').replace(/\"/g,'&quot;'); }
+
+// parse fallback if called directly
+function parseM3U(text) { parseM3UHybrid(text); }
+
+// handle parsed channels from worker or streaming - already set in handleParsedChannels
+
+// tiny helpers
+function showStatus(msg, isError=false) { els.statusLine.textContent = msg; els.statusLine.style.color = isError ? '#b91c1c' : 'var(--muted)'; setTimeout(()=>{ if (els.statusLine.textContent === msg) els.statusLine.textContent = ''; },8000); }
+function shortenUrl(u) { try { const _ = new URL(u); return _.hostname + _.pathname; } catch(e){ return (u||'').slice(0,60); } }
+
+// End of main IIFE actions: renderChannels when S.channels changes
+function renderChannelsIfAny(){ renderChannels(); els.m3uEditor.value = buildM3U(); }
+
+// on load, if editor has content parse
+setTimeout(()=> {
+  if (els.m3uEditor.value.trim()) parseM3UHybrid(els.m3uEditor.value.trim());
+  else if (els.m3uInput.value.trim()) parseM3UHybrid(els.m3uInput.value.trim());
+}, 200);
+
+})(); // end wrapper
 </script>
+
 </body>
 </html>
