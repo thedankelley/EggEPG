@@ -3,572 +3,925 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>IPTV M3U Editor — Sort, Logo Grabber, Xtream Converter (Client-side)</title>
+<title>EggEPG - Client-side IPTV M3U Editor</title>
 
+<!-- small, self contained CSS -->
 <style>
-  :root{--bg:#f7f9fb;--card:#fff;--accent:#0b79d0;--muted:#556;--ok:#1b9e5f}
-  body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); margin:0;padding:20px;color:#0b1722;}
-  .wrap{max-width:1100px;margin:0 auto}
-  header{display:flex;justify-content:space-between;align-items:center;gap:10px}
-  h1{font-size:20px;margin:0}
-  .row{display:flex;gap:12px;align-items:flex-start}
-  .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 6px 20px rgba(8,28,56,0.06)}
-  .panel{flex:1;min-width:260px}
-  .panel.small{flex:0 0 340px}
-  input[type=text], input[type=url], textarea, select {width:100%;padding:8px;border-radius:8px;border:1px solid #e2e8f0;box-sizing:border-box}
-  button{background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
-  button.ghost{background:transparent;color:var(--accent);border:1px solid #dbeafe}
-  .muted{color:var(--muted);font-size:13px}
-  .filelist{max-height:340px;overflow:auto;margin-top:8px;border-radius:8px;border:1px dashed #e6eef9;padding:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
-  .chan{display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #f1f5f9}
-  .chan:last-child{border-bottom:0}
-  .chan img{width:56px;height:32px;object-fit:contain;background:#fff;border-radius:4px;border:1px solid #eef4fb}
-  .chan .meta{flex:1;min-width:0}
-  .chan .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .drag-hint{cursor:grab}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .smallbtn{padding:6px 10px;font-size:13px}
-  .status{font-size:13px;color:var(--muted);margin-top:8px}
-  .xtreamOut{background:#0f1720;color:#fff;padding:8px;border-radius:6px;font-family:monospace;word-break:break-all}
-  .logo-input{display:flex;gap:6px;align-items:center}
-  .logo-input input{flex:1}
-  .logo-thumb{width:100px;height:56px;object-fit:contain;border-radius:6px;border:1px solid #eee}
-  footer{margin-top:18px;text-align:center;color:var(--muted);font-size:13px}
-  @media (max-width:900px){ .row{flex-direction:column} .panel.small{width:100%} }
+:root{
+  --bg:#f4f7fb;
+  --card:#ffffff;
+  --muted:#6b7280;
+  --accent:#0b79d0;
+  --panel-shadow: 0 6px 18px rgba(11,23,34,0.06);
+}
+[data-theme="dark"]{
+  --bg:#0f1720;
+  --card:#0b1220;
+  --muted:#9aa4b2;
+  --accent:#58a6ff;
+  color: #e6eefc;
+}
+html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+body{background:var(--bg);padding:18px;color:#06202b;}
+.container{max-width:1200px;margin:0 auto;}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#0b79d0,#58a6ff);display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+h1{margin:0;font-size:18px}
+.note{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:12px}
+.card{background:var(--card);padding:12px;border-radius:10px;box-shadow:var(--panel-shadow)}
+.small{padding:10px}
+.input,textarea,select{width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef6;box-sizing:border-box}
+textarea{min-height:120px;resize:vertical}
+.btn{background:var(--accent);color:#fff;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(11,121,208,0.12)}
+.row{display:flex;gap:8px;align-items:center}
+.filelist{max-height:360px;overflow:auto;border-radius:8px;border:1px dashed #e8f0fb;padding:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
+.channel{display:flex;gap:10px;align-items:center;padding:8px;border-bottom:1px solid #f1f5f9}
+.channel:last-child{border-bottom:0}
+.thumb{width:88px;height:48px;object-fit:contain;background:#fff;border-radius:6px;border:1px solid #eef4fb}
+.meta{flex:1;min-width:0}
+.meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.muted{color:var(--muted);font-size:13px}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+.smallbtn{padding:6px 8px;font-size:13px;border-radius:7px}
+.info{font-size:13px;color:var(--muted);margin-top:8px}
+.footer{margin-top:12px;text-align:center;color:var(--muted);font-size:13px}
+.hidden{display:none}
+.toggle{background:transparent;border:1px solid #dbeafe;padding:6px 8px;border-radius:6px;color:var(--accent)}
+.bad{color:#b91c1c}
+.good{color:#137a46}
+.validator{font-family:monospace; font-size:13px; background:#f8fafc; padding:8px; border-radius:6px; margin-top:8px; border:1px solid #eef6ff}
+.code{font-family:monospace; font-size:13px}
+@media (max-width:980px){ .grid{grid-template-columns:1fr; } .thumb{width:64px;height:36px} }
 </style>
 </head>
-<body>
-<div class="wrap">
+<body data-theme="light">
+<div class="container">
 
-<header>
-  <div>
-    <h1>IPTV M3U Editor — Sort • Logo Grabber • Xtream Converter (Client-side)</h1>
-    <div class="muted">Everything runs in your browser. Nothing is uploaded unless you choose to fetch remote XML/M3U URLs.</div>
-  </div>
-  <div style="text-align:right">
-    <button id="downloadM3U" title="Export edited M3U">Export M3U</button>
-    <button id="downloadM3UWithLogos" title="Export M3U and embed logos if present">Export M3U (with logos)</button>
-  </div>
-</header>
-
-<main class="row" style="margin-top:14px">
-  <section class="card panel small">
-    <h3>Load / Paste M3U</h3>
-    <input type="file" id="m3uFile" accept=".m3u,.txt" />
-    <div class="controls">
-      <button id="loadFromFile" class="smallbtn">Load file</button>
-      <button id="pasteM3U" class="smallbtn ghost">Paste into editor below</button>
-    </div>
-    <div style="margin-top:10px">
-      <label class="muted">Or paste raw M3U</label>
-      <textarea id="m3uText" rows="8" placeholder="#EXTM3U..."></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="parseBtn">Parse M3U</button>
-        <button id="autoLogoBtn" class="ghost">Auto-fetch logos (TVmaze)</button>
-        <button id="clearBtn" class="ghost">Clear</button>
+  <div class="header">
+    <div class="brand">
+      <div class="logo">EGG</div>
+      <div>
+        <h1>EggEPG</h1>
+        <div class="note">Client-side M3U editor - sorting, logos, automatic EPG id matching, Xtream converter</div>
       </div>
-      <div id="sourceStatus" class="status"></div>
     </div>
 
-    <hr style="margin:12px 0">
-
-    <h4>Xtream Codes → M3U URL</h4>
-    <div class="muted">Enter your Xtream credentials (client-side only). No values are sent anywhere.</div>
-    <input id="xcHost" type="url" placeholder="Host, e.g. http://example.com:8080" style="margin-top:8px" />
-    <input id="xcUser" type="text" placeholder="Username" />
-    <input id="xcPass" type="text" placeholder="Password" />
-    <div class="controls">
-      <button id="buildXtream" class="smallbtn">Generate URL</button>
-      <button id="buildXtreamM3U" class="smallbtn ghost">Generate M3U Template</button>
+    <div class="row">
+      <button id="saveProject" class="btn smallbtn">Save Project</button>
+      <button id="loadProject" class="btn smallbtn">Load Project</button>
+      <button id="clearProject" class="btn smallbtn ghost">Clear Project</button>
+      <button id="toggleTheme" class="toggle">Dark</button>
     </div>
-    <div style="margin-top:8px">
-      <div class="muted">Generated URL</div>
-      <div id="xtreamOutput" class="xtreamOut" style="margin-top:6px">—</div>
+  </div>
+
+  <div class="grid">
+    <!-- left panel -->
+    <div class="card small">
+      <h3>1. Load or paste M3U</h3>
+      <div class="muted">Load a local M3U file or paste the playlist text below</div>
+      <input id="fileM3U" type="file" accept=".m3u,.txt" style="margin-top:8px" />
+      <div class="row" style="margin-top:8px">
+        <button id="loadFileBtn" class="btn smallbtn">Load file</button>
+        <button id="pasteBtn" class="btn smallbtn ghost">Paste to editor</button>
+      </div>
+
+      <div style="margin-top:10px">
+        <textarea id="m3uInput" placeholder="#EXTM3U ... "></textarea>
+      </div>
+
+      <hr style="margin:12px 0" />
+
+      <h3>2. Optional: Upload XMLTV for automatic mapping</h3>
+      <div class="muted">If you have an XMLTV file, EggEPG can try to match xmltv channel ids to your M3U channels by fuzzy matching.</div>
+      <input id="fileXml" type="file" accept=".xml,.xml.gz" style="margin-top:8px" />
+      <div class="row" style="margin-top:8px">
+        <button id="loadXmlBtn" class="btn smallbtn">Load XMLTV</button>
+        <button id="autoMatchBtn" class="btn smallbtn ghost">Auto match EPG ids</button>
+      </div>
+      <div id="xmlInfo" class="info"></div>
+
+      <hr style="margin:12px 0" />
+
+      <h3>3. Xtream Codes converter</h3>
+      <div class="muted">Generate a standard Xtream m3u URL or an M3U template using credentials. Client-side only.</div>
+      <input id="xcHost" class="input" placeholder="Host e.g. http://example.com:8080" style="margin-top:8px"/>
+      <input id="xcUser" class="input" placeholder="Username"/>
+      <input id="xcPass" class="input" placeholder="Password"/>
+      <div class="row" style="margin-top:8px">
+        <button id="buildXtreamBtn" class="btn smallbtn">Generate URL</button>
+        <button id="buildXtreamM3UBtn" class="btn smallbtn ghost">Make M3U Template</button>
+      </div>
+      <div style="margin-top:8px">
+        <div class="muted">Xtream URL</div>
+        <div id="xtreamOut" class="code" style="margin-top:6px"></div>
+      </div>
+
+      <hr style="margin:12px 0" />
+
+      <h3>4. Project</h3>
+      <div class="muted">Save or load your current project locally.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="exportProjectBtn" class="btn smallbtn">Export JSON</button>
+        <button id="importProjectBtn" class="btn smallbtn ghost">Import JSON</button>
+        <input id="projFile" type="file" accept="application/json" class="hidden">
+      </div>
+
     </div>
 
-  </section>
+    <!-- right panel -->
+    <div class="card">
+      <h3>Channels</h3>
+      <div class="muted">Drag and drop channels to reorder. Use the controls to auto-fetch logos, remove duplicates, validate, and export the final playlist.</div>
 
-  <section class="card panel" style="flex:2">
-    <h3>Channels — Drag to reorder</h3>
-    <div class="muted">Drag & drop channels to change order. Click a channel to edit tvg-id / tvg-name / tvg-logo. Use "Auto-fetch logos" first to populate logos.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+        <button id="parseBtn" class="btn smallbtn">Parse M3U</button>
+        <button id="autoLogosBtn" class="btn smallbtn ghost">Auto logos (iptv-org + TVmaze)</button>
+        <button id="generateIdsBtn" class="btn smallbtn ghost">Generate missing tvg-ids</button>
+        <button id="removeDupBtn" class="btn smallbtn ghost">Remove duplicates</button>
+        <button id="validateBtn" class="btn smallbtn">Validate M3U</button>
+        <div style="flex:1"></div>
+        <button id="exportBtn" class="btn smallbtn">Export M3U</button>
+      </div>
 
-    <div class="filelist" id="channelList" style="margin-top:10px">
-      <!-- populated dynamically -->
-      <div class="muted">No channels loaded yet — parse an M3U to see channels here.</div>
+      <div id="validatorResult" class="validator" style="margin-top:10px;display:none"></div>
+
+      <div id="channelList" class="filelist" style="margin-top:12px">
+        <div class="muted">No channels loaded yet. Parse an M3U to populate this list.</div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+        <div class="muted">Channels: <span id="chanCount">0</span></div>
+        <div style="flex:1"></div>
+        <div class="muted">Project autosaved to localStorage</div>
+      </div>
+
+      <hr style="margin:12px 0" />
+
+      <h3>Editor</h3>
+      <div class="muted">You can edit the M3U text directly and re-parse. Current order and attributes are used when exporting.</div>
+      <textarea id="m3uEditor" style="margin-top:8px;min-height:160px"></textarea>
+
     </div>
+  </div>
 
-    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-      <button id="removeDup" class="smallbtn">Remove Duplicates</button>
-      <button id="sortAlphabet" class="smallbtn ghost">Sort A→Z</button>
-      <button id="sortReverse" class="smallbtn ghost">Sort Z→A</button>
-      <button id="saveOrder" class="smallbtn">Save Order (to editor)</button>
-      <div style="flex:1"></div>
-      <div class="muted">Channels: <span id="chanCount">0</span></div>
-    </div>
+  <div class="footer">
+    EggEPG is client-side only. Use with care for private credentials. No data is sent anywhere by default.
+  </div>
+</div>
 
-    <hr style="margin:12px 0">
-
-    <h4>Editor</h4>
-    <div class="muted">You can directly edit the M3U text here and re-parse. When exporting, the current channel order and any updated tvg-* attributes will be used.</div>
-    <textarea id="m3uEditor" rows="8" style="margin-top:8px"></textarea>
-
-  </section>
-</main>
-
-<footer>
-  <div class="muted" style="margin-top:8px">Client-only app • Use GitHub Pages to host this file as index.html</div>
-</footer>
-
+<!-- Single-file script implementing all features -->
 <script>
-/*
-  IPTV M3U Editor — client-side
-  Features implemented:
-    - Parse M3U (EXTINF lines + streams)
-    - Show channel list with logos and metadata
-    - Drag & drop sorting
-    - Remove duplicates and sort operations
-    - Auto-fetch logos:
-        * If tvg-logo present, show it
-        * Else try TVmaze search: https://api.tvmaze.com/search/shows?q=channelName
-          (uses show.image or show.network.image if present)
-        * Note: remote fetches may fail due to CORS on some hosts
-    - Xtream converter: host/user/pass -> m3u URL and a ready-to-use M3U template
-    - Export M3U (current order + updated attributes)
-    - All local to browser
-*/
+(function(){
 
-(() => {
-  // State
-  let channels = []; // {name, url, tvgId, tvgName, tvgLogo, rawExtinf, rawUrl}
-  const channelListEl = document.getElementById('channelList');
-  const m3uEditor = document.getElementById('m3uEditor');
-  const m3uTextArea = document.getElementById('m3uText');
-  const sourceStatus = document.getElementById('sourceStatus');
-  const chanCountEl = document.getElementById('chanCount');
+// State
+let state = {
+  channels: [], // {id,name,url,tvgId,tvgName,tvgLogo,rawExtinf,rawUrl}
+  xmltv: { channels: [], loaded: false }, // xmltv channels {id,display}
+  settings: { theme: localStorage.getItem('eggepg_theme') || 'light' }
+};
 
-  // helpers
-  function uid() { return 'c_' + Math.random().toString(36).slice(2,9); }
+// Helpers
+const qs = s => document.querySelector(s);
+const qsa = s => Array.from(document.querySelectorAll(s));
+const uid = () => 'id_' + Math.random().toString(36).slice(2,9);
+const escapeHtml = s => (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  function setStatus(s) { sourceStatus.textContent = s; }
+// DOM elements
+const fileM3U = qs('#fileM3U');
+const loadFileBtn = qs('#loadFileBtn');
+const pasteBtn = qs('#pasteBtn');
+const m3uInput = qs('#m3uInput');
+const parseBtn = qs('#parseBtn');
+const channelListEl = qs('#channelList');
+const m3uEditor = qs('#m3uEditor');
+const exportBtn = qs('#exportBtn');
+const autoLogosBtn = qs('#autoLogosBtn');
+const removeDupBtn = qs('#removeDupBtn');
+const validateBtn = qs('#validateBtn');
+const validatorResult = qs('#validatorResult');
+const chanCount = qs('#chanCount');
+const generateIdsBtn = qs('#generateIdsBtn');
 
-  // Parse M3U text into channels[]
-  function parseM3U(text) {
-    channels = [];
-    const lines = text.split(/\r?\n/).map(s => s.trim()).filter(s => s.length > 0);
-    let currentMeta = null;
-    for (const line of lines) {
-      if (line.startsWith('#EXTINF')) {
-        currentMeta = line;
-      } else if (line.startsWith('#')) {
-        // ignore other comments
-      } else {
-        // url line
-        const url = line;
-        if (!currentMeta) {
-          // no meta, create a minimal entry
-          channels.push({ id: uid(), name: url, url, tvgId:'', tvgName:'', tvgLogo:'', rawExtinf:'', rawUrl:url });
-        } else {
-          const ext = currentMeta;
-          // parse tvg-id, tvg-name, tvg-logo attributes if present
-          const tvgIdMatch = ext.match(/tvg-id="([^"]*)"/i);
-          const tvgNameMatch = ext.match(/tvg-name="([^"]*)"/i);
-          const tvgLogoMatch = ext.match(/tvg-logo="([^"]*)"/i);
-          // fallback name: after comma
-          const afterComma = ext.indexOf(',') >= 0 ? ext.split(',').slice(1).join(',').trim() : '';
-          const name = tvgNameMatch ? tvgNameMatch[1] : (afterComma || url);
-          const tvgId = tvgIdMatch ? tvgIdMatch[1] : '';
-          const tvgLogo = tvgLogoMatch ? tvgLogoMatch[1] : '';
-          channels.push({ id: uid(), name, url, tvgId, tvgName: name, tvgLogo, rawExtinf: ext, rawUrl: url });
-          currentMeta = null;
-        }
-      }
-    }
-    renderChannelList();
-  }
+const fileXml = qs('#fileXml');
+const loadXmlBtn = qs('#loadXmlBtn');
+const autoMatchBtn = qs('#autoMatchBtn');
+const xmlInfo = qs('#xmlInfo');
 
-  // Render channel list
-  function renderChannelList() {
-    channelListEl.innerHTML = '';
-    if (channels.length === 0) {
-      channelListEl.innerHTML = '<div class="muted">No channels loaded — parse an M3U first.</div>';
-      chanCountEl.textContent = '0';
-      return;
-    }
-    for (let i = 0; i < channels.length; i++) {
-      const ch = channels[i];
-      const row = document.createElement('div');
-      row.className = 'chan';
-      row.draggable = true;
-      row.dataset.index = i;
-      row.innerHTML = `
-        <div style="width:72px;display:flex;align-items:center;justify-content:center">
-          <img class="logoThumb" src="${escapeHtml(ch.tvgLogo||'')}" alt="" onerror="this.style.visibility='hidden'">
-        </div>
-        <div class="meta">
-          <b title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</b>
-          <div class="muted">tvg-id: <span class="muted idText">${escapeHtml(ch.tvgId||'')}</span></div>
-          <div class="muted">url: <span class="muted urlText">${escapeHtml(simplifyUrl(ch.url))}</span></div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="smallbtn editBtn">Edit</button>
-          <button class="smallbtn logoBtn ghost">Set Logo</button>
-          <button class="smallbtn hideBtn ghost">Hide</button>
-        </div>
-      `;
-      // drag events
-      row.addEventListener('dragstart', (ev) => {
-        ev.dataTransfer.setData('text/plain', ev.currentTarget.dataset.index);
-        ev.currentTarget.style.opacity = '0.6';
-      });
-      row.addEventListener('dragend', (ev) => {
-        ev.currentTarget.style.opacity = '';
-      });
-      row.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; });
-      row.addEventListener('drop', (ev) => {
-        ev.preventDefault();
-        const fromIdx = Number(ev.dataTransfer.getData('text/plain'));
-        const toIdx = Number(ev.currentTarget.dataset.index);
-        reorderChannels(fromIdx, toIdx);
-      });
+const saveProjectBtn = qs('#saveProject');
+const loadProjectBtn = qs('#loadProject');
+const clearProjectBtn = qs('#clearProject');
+const exportProjectBtn = qs('#exportProjectBtn');
+const importProjectBtn = qs('#importProjectBtn');
+const projFile = qs('#projFile');
 
-      // buttons
-      row.querySelector('.editBtn').addEventListener('click', () => {
-        editChannel(ch);
-      });
-      row.querySelector('.logoBtn').addEventListener('click', () => {
-        promptSetLogo(ch);
-      });
-      row.querySelector('.hideBtn').addEventListener('click', () => {
-        // mark hidden: remove from list but keep in memory
-        channels.splice(i,1);
-        renderChannelList();
-      });
+const buildXtreamBtn = qs('#buildXtreamBtn');
+const buildXtreamM3UBtn = qs('#buildXtreamM3UBtn');
+const xcHost = qs('#xcHost');
+const xcUser = qs('#xcUser');
+const xcPass = qs('#xcPass');
+const xtreamOut = qs('#xtreamOut');
 
-      channelListEl.appendChild(row);
-    }
-    chanCountEl.textContent = String(channels.length);
-    // sync editor text to reflect updated order
-    syncEditorFromChannels();
-  }
+const toggleThemeBtn = qs('#toggleTheme');
 
-  function simplifyUrl(u) {
-    try {
-      const url = new URL(u);
-      return url.hostname + (url.pathname || '');
-    } catch(e) { return u.length > 60 ? u.slice(0,60) + '…' : u; }
-  }
+// Initialize theme
+document.body.setAttribute('data-theme', state.settings.theme);
+toggleThemeBtn.textContent = state.settings.theme === 'dark' ? 'Light' : 'Dark';
 
-  // reorder channels
-  function reorderChannels(from, to) {
-    if (from === to) return;
-    const item = channels.splice(from,1)[0];
-    channels.splice(to,0,item);
-    renderChannelList();
-  }
-
-  // edit channel metadata
-  function editChannel(ch) {
-    const newName = prompt('Channel name (tvg-name):', ch.name) || ch.name;
-    const newId = prompt('tvg-id:', ch.tvgId || '') || ch.tvgId;
-    const newLogo = prompt('tvg-logo (URL):', ch.tvgLogo || '') || ch.tvgLogo;
-    ch.name = newName;
-    ch.tvgName = newName;
-    ch.tvgId = newId;
-    ch.tvgLogo = newLogo;
-    renderChannelList();
-  }
-
-  function promptSetLogo(ch) {
-    const url = prompt('Enter logo image URL (or leave blank to remove):', ch.tvgLogo || '');
-    if (url === null) return;
-    ch.tvgLogo = url.trim();
-    renderChannelList();
-  }
-
-  // Remove duplicates (based on name+url)
-  function removeDuplicates() {
-    const seen = new Set();
-    const out = [];
-    for (const ch of channels) {
-      const key = (ch.name + '|' + ch.url).toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(ch);
-    }
-    channels = out;
-    renderChannelList();
-  }
-
-  // Sort operations
-  function sortAlphabet(asc=true) {
-    channels.sort((a,b) => asc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
-    renderChannelList();
-  }
-
-  // sync M3U editor from channels (rebuild M3U text using current order and attributes)
-  function syncEditorFromChannels() {
-    const header = '#EXTM3U\n';
-    let body = '';
-    for (const ch of channels) {
-      const tvgIdAttr = ch.tvgId ? ` tvg-id="${escapeAttr(ch.tvgId)}"` : '';
-      const tvgNameAttr = ch.tvgName ? ` tvg-name="${escapeAttr(ch.tvgName)}"` : '';
-      const tvgLogoAttr = ch.tvgLogo ? ` tvg-logo="${escapeAttr(ch.tvgLogo)}"` : '';
-      const ext = `#EXTINF:-1${tvgIdAttr}${tvgNameAttr}${tvgLogoAttr},${escapeLineTitle(ch.name)}`;
-      body += ext + '\n' + ch.url + '\n';
-    }
-    m3uEditor.value = header + body;
-  }
-
-  function escapeAttr(s) {
-    return s.replace(/"/g, '&quot;');
-  }
-  function escapeLineTitle(s) {
-    return s.replace(/\n/g,' ').trim();
-  }
-
-  // parse editor into channels when user pastes edited text and clicks Parse
-  function syncChannelsFromEditor() {
-    const txt = m3uEditor.value.trim() || m3uTextArea.value.trim();
-    if (!txt) { setStatus('No M3U text to parse'); return; }
-    parseM3U(txt);
-    setStatus('Parsed M3U from editor');
-  }
-
-  // Export M3U using current channels order and attributes
-  function buildM3UString(includeLogos=true) {
-    let out = '#EXTM3U\n';
-    for (const ch of channels) {
-      const idAttr = ch.tvgId ? ` tvg-id="${escapeAttr(ch.tvgId)}"` : '';
-      const nameAttr = ch.tvgName ? ` tvg-name="${escapeAttr(ch.tvgName)}"` : '';
-      const logoAttr = (includeLogos && ch.tvgLogo) ? ` tvg-logo="${escapeAttr(ch.tvgLogo)}"` : '';
-      const ext = `#EXTINF:-1${idAttr}${nameAttr}${logoAttr},${escapeLineTitle(ch.name)}`;
-      out += ext + '\n' + ch.url + '\n';
-    }
-    return out;
-  }
-
-  // Xtream Codes generator
-  function buildXtreamUrl() {
-    const host = document.getElementById('xcHost').value.trim();
-    const user = document.getElementById('xcUser').value.trim();
-    const pass = document.getElementById('xcPass').value.trim();
-    if (!host || !user || !pass) {
-      document.getElementById('xtreamOutput').textContent = 'Provide host, username and password.';
-      return;
-    }
-    // Normalize host: ensure no trailing slash
-    const h = host.endsWith('/') ? host.slice(0, -1) : host;
-    // Standard Xtream URL pattern
-    const url = `${h}/get.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&type=m3u_plus&output=ts`;
-    document.getElementById('xtreamOutput').textContent = url;
-    return url;
-  }
-
-  // Generate a basic M3U template using Xtream credentials (just a single entry that points at the Xtream M3U)
-  function buildXtreamM3UTemplate() {
-    const url = buildXtreamUrl();
-    if (!url) return;
-    const header = '#EXTM3U\n';
-    const line = `#EXTINF:-1,My Xtream Playlist\n${url}\n`;
-    const out = header + line;
-    document.getElementById('m3uEditor').value = out;
-    setStatus('Xtream M3U template created in editor.');
-    parseM3U(out); // load into channels (will have one entry)
-  }
-
-  // Auto-fetch logos: prefer existing tvgLogo; else call TVmaze search
-  async function autoFetchLogos() {
-    setStatus('Fetching logos... TVmaze rate-limits and CORS may affect results.');
-    const tvmazeBase = 'https://api.tvmaze.com/search/shows?q='; // public, no key
-    // iterate channels, but do not hammer TVmaze too fast; add small delay
-    for (let i = 0; i < channels.length; i++) {
-      const ch = channels[i];
-      if (ch.tvgLogo) {
-        // already has a logo
-        continue;
-      }
-      // Try to derive a short query from channel name (strip punctuation)
-      let q = ch.name.replace(/\(.+\)/g,'').replace(/[^a-z0-9\s]/ig,' ').trim();
-      if (!q) q = ch.name;
-      // Try using tvgId as fallback query
-      if (!q && ch.tvgId) q = ch.tvgId;
-      // Attempt TVmaze
-      try {
-        // Note: TVmaze supports CORS on this endpoint (commonly works). Still may be blocked occasionally.
-        const resp = await fetch(tvmazeBase + encodeURIComponent(q));
-        if (!resp.ok) {
-          // no match or blocked
-          console.warn('TVmaze failed for', q, resp.status);
-          continue;
-        }
-        const js = await resp.json();
-        if (Array.isArray(js) && js.length > 0) {
-          // choose best hit (first)
-          const show = js[0].show;
-          // prefer show.image.original or medium; else show.network.image
-          let logo = (show.image && (show.image.original || show.image.medium)) || (show.network && show.network.image && (show.network.image.original || show.network.image.medium)) || '';
-          if (logo) {
-            ch.tvgLogo = logo;
-            console.log('Logo found for', ch.name, logo);
-            // update UI immediately
-            renderChannelList();
-            // tiny delay to avoid rate limits
-            await delay(350);
-            continue;
-          }
-        }
-      } catch (err) {
-        console.warn('logo fetch error', err);
-      }
-      // If TVmaze didn't yield a logo, try simple guessed URL patterns (rare)
-      // Example heuristics: try using https://logo.clearbit.com/<hostname> if stream URL includes hostname
-      try {
-        const urlObj = new URL(ch.url);
-        const candidate = `https://logo.clearbit.com/${urlObj.hostname}`;
-        // Ping the image HEAD to see if it exists (some CDNs may block)
-        const ok = await checkImageExists(candidate);
-        if (ok) { ch.tvgLogo = candidate; renderChannelList(); await delay(200); continue; }
-      } catch(e){}
-    }
-    setStatus('Logo fetching complete (some channels may have none due to lack of data or blocked requests).');
-    renderChannelList();
-  }
-
-  // helper: check image exists by fetching HEAD (or GET small)
-  async function checkImageExists(url) {
-    try {
-      const r = await fetch(url, { method: 'HEAD' });
-      return r.ok;
-    } catch(e){
-      // HEAD sometimes blocked; try GET with small timeout
-      try {
-        const r2 = await fetch(url);
-        return r2.ok && r2.headers.get('content-type') && r2.headers.get('content-type').startsWith('image');
-      } catch (ee) { return false; }
-    }
-  }
-
-  function delay(ms) { return new Promise(res=>setTimeout(res, ms)); }
-
-  // Utility escape for text content insertion
-  function escapeHtml(s) { if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-  // Event wiring
-  document.getElementById('parseBtn').addEventListener('click', () => {
-    const txt = m3uEditor.value.trim() || m3uTextArea.value.trim();
-    if (!txt) { setStatus('No M3U text provided in editor or input'); return; }
-    parseM3U(txt);
-    setStatus('Parsed M3U');
-  });
-
-  document.getElementById('loadFromFile').addEventListener('click', () => {
-    const f = document.getElementById('m3uFile').files[0];
-    if (!f) { alert('Choose a file'); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      m3uEditor.value = e.target.result;
-      parseM3U(e.target.result);
-      setStatus('Loaded from file');
-    };
-    reader.readAsText(f);
-  });
-
-  document.getElementById('pasteM3U').addEventListener('click', () => {
-    const txt = m3uTextArea.value.trim();
-    if (!txt) { alert('Paste M3U text into the top textarea first'); return; }
-    m3uEditor.value = txt;
-    parseM3U(txt);
-    setStatus('Pasted to editor and parsed');
-  });
-
-  document.getElementById('clearBtn').addEventListener('click', () => {
-    if (!confirm('Clear current channels and editor?')) return;
-    channels = [];
-    m3uEditor.value = '';
-    m3uTextArea.value = '';
-    renderChannelList();
-    setStatus('Cleared');
-  });
-
-  document.getElementById('autoLogoBtn').addEventListener('click', async () => {
-    if (channels.length === 0) { setStatus('No channels to fetch logos for'); return; }
-    if (!confirm('Auto-fetching logos will query TVmaze for each channel name (client-side). Continue?')) return;
-    setStatus('Starting logo fetch (may take several seconds)...');
-    await autoFetchLogos();
-  });
-
-  document.getElementById('removeDup').addEventListener('click', () => {
-    removeDuplicates();
-    setStatus('Duplicates removed');
-  });
-
-  document.getElementById('sortAlphabet').addEventListener('click', () => {
-    sortAlphabet(true); setStatus('Sorted A→Z');
-  });
-  document.getElementById('sortReverse').addEventListener('click', () => {
-    sortAlphabet(false); setStatus('Sorted Z→A');
-  });
-
-  document.getElementById('saveOrder').addEventListener('click', () => {
-    syncEditorFromChannels();
-    setStatus('Saved channel order to editor text.');
-  });
-
-  // downloads
-  document.getElementById('downloadM3U').addEventListener('click', () => {
-    const txt = buildM3UString(true);
-    downloadBlob(txt, 'playlist.m3u');
-  });
-  document.getElementById('downloadM3UWithLogos').addEventListener('click', () => {
-    const txt = buildM3UString(true);
-    downloadBlob(txt, 'playlist_with_logos.m3u');
-  });
-
-  // Xtream wiring
-  document.getElementById('buildXtream').addEventListener('click', () => {
-    const url = buildXtreamUrl();
-    if (url) {
-      document.getElementById('xtreamOutput').textContent = url;
-      setStatus('Xtream URL built. You can copy it.');
-    }
-  });
-  document.getElementById('buildXtreamM3U').addEventListener('click', () => {
-    buildXtreamM3UTemplate();
-  });
-
-  // utility to download text blob
-  function downloadBlob(text, filename) {
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-  }
-
-  // initial sample quick help content
-  m3uTextArea.placeholder = '#EXTM3U\n#EXTINF:-1,tvg-name="Channel name" tvg-id="chan1" tvg-logo="https://example.com/logo.png",Channel display name\nhttp://stream.url/stream.ts\n...';
-
-  // expose some functions to console for advanced usage
-  window._m3uEditorApp = {
-    channels,
-    parseM3U,
-    buildM3UString,
-    autoFetchLogos,
-    reorderChannels,
-    renderChannelList,
-    syncEditorFromChannels,
-    syncChannelsFromEditor: () => syncChannelsFromEditor()
+// Utility: save project to localStorage automatically
+function autosave() {
+  const proj = {
+    channels: state.channels,
+    xmltv: state.xmltv,
+    settings: state.settings,
+    m3uText: m3uEditor.value || m3uInput.value || ''
   };
+  try { localStorage.setItem('eggepg_project', JSON.stringify(proj)); } catch(e){}
+}
 
-  // Sync initial editor to channels on load if there's content
-  setTimeout(()=> {
-    const initial = m3uTextArea.value.trim() || m3uEditor.value.trim();
-    if (initial) parseM3U(initial);
-  }, 200);
+// Load project if present on start
+(function loadOnStart(){
+  const raw = localStorage.getItem('eggepg_project');
+  if (raw) {
+    try {
+      const proj = JSON.parse(raw);
+      if (proj) {
+        if (proj.channels) state.channels = proj.channels;
+        if (proj.xmltv) state.xmltv = proj.xmltv;
+        if (proj.settings) { state.settings = proj.settings; document.body.setAttribute('data-theme', state.settings.theme || 'light'); toggleThemeBtn.textContent = state.settings.theme === 'dark' ? 'Light' : 'Dark'; }
+        if (proj.m3uText) { m3uEditor.value = proj.m3uText; m3uInput.value = proj.m3uText; }
+        renderChannelList();
+      }
+    } catch(e){}
+  }
+})();
 
-})(); // end IIFE
+setInterval(autosave, 5000);
+
+// File load handlers
+loadFileBtn.addEventListener('click', () => {
+  const f = fileM3U.files[0];
+  if (!f) return alert('Choose a file first');
+  const r = new FileReader();
+  r.onload = e => {
+    m3uInput.value = e.target.result;
+    m3uEditor.value = e.target.result;
+    parseM3UText(e.target.result);
+  };
+  r.readAsText(f);
+});
+
+pasteBtn.addEventListener('click', () => {
+  if (!m3uInput.value.trim()) return alert('Paste the M3U text in the top box first');
+  m3uEditor.value = m3uInput.value;
+  parseM3UText(m3uInput.value);
+});
+
+// Parse button
+parseBtn.addEventListener('click', () => {
+  const text = m3uEditor.value.trim() || m3uInput.value.trim();
+  if (!text) return alert('No M3U text available in editor or input');
+  parseM3UText(text);
+  m3uEditor.value = buildM3UFromChannels();
+});
+
+// M3U parser
+function parseM3UText(text) {
+  const lines = text.split(/\r?\n/);
+  const chs = [];
+  let pending = null;
+  for (let raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith('#EXTINF')) {
+      pending = { rawExtinf: line };
+      // parse attributes
+      const tvgId = (line.match(/tvg-id="([^"]*)"/i) || [])[1] || '';
+      const tvgName = (line.match(/tvg-name="([^"]*)"/i) || [])[1] || '';
+      const tvgLogo = (line.match(/tvg-logo="([^"]*)"/i) || [])[1] || '';
+      const afterComma = line.indexOf(',') >= 0 ? line.split(',').slice(1).join(',').trim() : '';
+      const name = tvgName || afterComma || '';
+      pending.name = name;
+      pending.tvgId = tvgId;
+      pending.tvgName = tvgName || name;
+      pending.tvgLogo = tvgLogo;
+    } else if (line.startsWith('#')) {
+      // ignore other tags
+    } else {
+      // url line
+      if (!pending) {
+        // no meta - create basic
+        chs.push({
+          id: uid(),
+          name: line,
+          url: line,
+          tvgId: '',
+          tvgName: line,
+          tvgLogo: '',
+          rawExtinf: '',
+          rawUrl: line
+        });
+      } else {
+        pending.id = uid();
+        pending.url = line;
+        pending.rawUrl = line;
+        chs.push(pending);
+        pending = null;
+      }
+    }
+  }
+  state.channels = chs;
+  renderChannelList();
+  updateCounts();
+}
+
+// Render channel list UI
+function renderChannelList() {
+  channelListEl.innerHTML = '';
+  if (!state.channels || state.channels.length === 0) {
+    channelListEl.innerHTML = '<div class="muted">No channels loaded. Parse an M3U first.</div>';
+    return;
+  }
+  state.channels.forEach((ch, idx) => {
+    const div = document.createElement('div');
+    div.className = 'channel';
+    div.draggable = true;
+    div.dataset.index = idx;
+
+    const logoUrl = ch.tvgLogo || '';
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.src = logoUrl || '';
+    img.alt = '';
+    img.onerror = function(){ this.style.visibility = 'hidden'; };
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `<b title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</b>
+      <div class="muted">tvg-id: <span class="code">${escapeHtml(ch.tvgId || '')}</span></div>
+      <div class="muted">url: <span class="code">${escapeHtml(shorten(ch.url || ''))}</span></div>`;
+
+    const controls = document.createElement('div');
+    controls.style.display = 'flex';
+    controls.style.gap = '6px';
+    controls.innerHTML = `<button class="smallbtn">Edit</button><button class="smallbtn ghost">Set logo</button><button class="smallbtn ghost">Move top</button>`;
+
+    // buttons events
+    controls.children[0].addEventListener('click', ()=> editChannel(idx));
+    controls.children[1].addEventListener('click', ()=> setLogoPrompt(idx));
+    controls.children[2].addEventListener('click', ()=> moveToTop(idx));
+
+    // drag events
+    div.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', idx);
+      e.currentTarget.style.opacity = '0.6';
+    });
+    div.addEventListener('dragend', e => {
+      e.currentTarget.style.opacity = '';
+    });
+    div.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    div.addEventListener('drop', e => {
+      e.preventDefault();
+      const from = Number(e.dataTransfer.getData('text/plain'));
+      const to = Number(e.currentTarget.dataset.index);
+      reorderChannels(from, to);
+    });
+
+    div.appendChild(img);
+    div.appendChild(meta);
+    div.appendChild(controls);
+    channelListEl.appendChild(div);
+  });
+  updateCounts();
+}
+
+// Utility shorten url display
+function shorten(u) {
+  if (!u) return '';
+  try {
+    const url = new URL(u);
+    return url.hostname + url.pathname;
+  } catch(e) {
+    return u.length > 60 ? u.slice(0,60) + '...' : u;
+  }
+}
+
+// Channel edit
+function editChannel(idx) {
+  const ch = state.channels[idx];
+  const newName = prompt('Channel name (tvg-name)', ch.tvgName || ch.name) || ch.tvgName || ch.name;
+  const newId = prompt('tvg-id', ch.tvgId || '') || ch.tvgId || '';
+  const newLogo = prompt('tvg-logo URL', ch.tvgLogo || '') || ch.tvgLogo || '';
+  ch.name = newName;
+  ch.tvgName = newName;
+  ch.tvgId = newId;
+  ch.tvgLogo = newLogo;
+  renderChannelList();
+  m3uEditor.value = buildM3UFromChannels();
+}
+
+// Set logo prompt
+function setLogoPrompt(idx) {
+  const ch = state.channels[idx];
+  const url = prompt('Enter logo URL (leave empty to clear)', ch.tvgLogo || '') ;
+  if (url === null) return;
+  ch.tvgLogo = url.trim();
+  renderChannelList();
+  m3uEditor.value = buildM3UFromChannels();
+}
+
+// Move to top
+function moveToTop(idx) {
+  const item = state.channels.splice(idx,1)[0];
+  state.channels.unshift(item);
+  renderChannelList();
+  m3uEditor.value = buildM3UFromChannels();
+}
+
+// Reorder
+function reorderChannels(from, to) {
+  if (from === to) return;
+  const item = state.channels.splice(from,1)[0];
+  state.channels.splice(to,0,item);
+  renderChannelList();
+  m3uEditor.value = buildM3UFromChannels();
+}
+
+// Remove duplicates
+removeDupBtn.addEventListener('click', () => {
+  const seen = new Set();
+  const out = [];
+  for (const ch of state.channels) {
+    const key = (ch.tvgId || ch.name || ch.url).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(ch);
+  }
+  state.channels = out;
+  renderChannelList();
+  m3uEditor.value = buildM3UFromChannels();
+});
+
+// Generate missing tvg-ids (slugify names)
+generateIdsBtn.addEventListener('click', () => {
+  for (const ch of state.channels) {
+    if (!ch.tvgId || ch.tvgId.trim() === '') {
+      ch.tvgId = slugify(ch.name);
+    }
+  }
+  renderChannelList();
+  m3uEditor.value = buildM3UFromChannels();
+});
+
+// Simple slugify
+function slugify(s) {
+  if (!s) return '';
+  return s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,64);
+}
+
+// Auto logos: use iptv-org logos repo, then TVmaze fallback
+autoLogosBtn.addEventListener('click', async () => {
+  if (!state.channels || state.channels.length === 0) return alert('No channels to fetch logos for');
+  const useIptvOrg = confirm('Try iptv-org logos first, then TVmaze for missing logos. Continue?');
+  if (!useIptvOrg) return;
+  qs('#channelList').style.opacity = '0.6';
+  for (let i=0;i<state.channels.length;i++){
+    const ch = state.channels[i];
+    // skip if already has logo
+    if (ch.tvgLogo && ch.tvgLogo.trim() !== '') continue;
+    // try iptv-org logos: the repo organizes logos by first char
+    const guess = guessIptvLogoUrl(ch.name);
+    if (guess) {
+      const ok = await imageExists(guess);
+      if (ok) { ch.tvgLogo = guess; renderChannelList(); await sleep(120); continue; }
+    }
+    // tvmaze fallback using show search
+    try {
+      const q = encodeURIComponent(ch.name.replace(/\(.+\)/,'').replace(/[^a-z0-9 ]/ig,' ').trim());
+      if (!q) continue;
+      const url = 'https://api.tvmaze.com/search/shows?q=' + q;
+      const res = await fetch(url);
+      if (!res.ok) { await sleep(120); continue; }
+      const js = await res.json();
+      if (Array.isArray(js) && js.length > 0) {
+        const show = js[0].show;
+        const logo = (show.image && (show.image.original || show.image.medium)) || '';
+        if (logo) { ch.tvgLogo = logo; renderChannelList(); await sleep(200); continue; }
+      }
+    } catch(e){
+      // ignore errors, continue
+    }
+  }
+  qs('#channelList').style.opacity = '';
+  alert('Auto logo fetch complete. Some channels may remain without logos due to missing matches or CORS.');
+  m3uEditor.value = buildM3UFromChannels();
+});
+
+// Guess iptv-org logo URL
+function guessIptvLogoUrl(name) {
+  if (!name) return null;
+  const s = name.toLowerCase().replace(/[^a-z0-9]/g,'');
+  if (!s) return null;
+  const first = s[0];
+  // iptv-org repo layout (this pattern works for many logos): https://github.com/iptv-org/iptv/tree/master/logos
+  return `https://raw.githubusercontent.com/iptv-org/iptv/master/logo/${first}/${s}.png`;
+}
+
+// image exists check
+async function imageExists(url) {
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    if (r.ok) return true;
+    // some hosts block HEAD - try GET with small timeout
+    const r2 = await fetch(url);
+    return r2.ok && (r2.headers.get('content-type') || '').startsWith('image');
+  } catch(e) { return false; }
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+// Validate M3U
+validateBtn.addEventListener('click', () => {
+  const text = m3uEditor.value.trim() || m3uInput.value.trim();
+  if (!text) return alert('No M3U content to validate');
+  const result = validateM3U(text);
+  showValidation(result);
+});
+
+function validateM3U(text) {
+  const lines = text.split(/\r?\n/);
+  const result = { ok: true, errors: [], warnings: [], channelCount: 0 };
+  if (!lines[0] || !lines[0].includes('#EXTM3U')) {
+    result.ok = false;
+    result.errors.push('Missing #EXTM3U header at top of file');
+  }
+  let expectingUrl = false;
+  for (let i=0;i<lines.length;i++){
+    const l = lines[i].trim();
+    if (!l) continue;
+    if (l.startsWith('#EXTINF')) {
+      expectingUrl = true;
+    } else if (l.startsWith('#')) {
+      // other tag - ignore
+    } else {
+      // url line
+      if (!isValidUrl(l)) {
+        result.warnings.push(`Line ${i+1}: URL may be invalid - ${l}`);
+      }
+      if (expectingUrl) { result.channelCount++; expectingUrl = false; }
+    }
+  }
+  if (expectingUrl) result.errors.push('Trailing #EXTINF without a following URL');
+  return result;
+}
+
+function isValidUrl(s) {
+  try { new URL(s); return true; } catch(e) { return false; }
+}
+
+function showValidation(r) {
+  validatorResult.style.display = 'block';
+  validatorResult.innerHTML = '';
+  const h = document.createElement('div');
+  h.innerHTML = `<b>Channels found</b>: ${r.channelCount} &nbsp; <b>OK</b>: ${r.ok ? '<span class="good">yes</span>' : '<span class="bad">no</span>'}`;
+  validatorResult.appendChild(h);
+  if (r.errors && r.errors.length) {
+    const e = document.createElement('div'); e.innerHTML = '<b>Errors</b>:<br>' + r.errors.map(x=>escapeHtml(x)).join('<br>');
+    validatorResult.appendChild(e);
+  }
+  if (r.warnings && r.warnings.length) {
+    const w = document.createElement('div'); w.innerHTML = '<b>Warnings</b>:<br>' + r.warnings.map(x=>escapeHtml(x)).join('<br>');
+    validatorResult.appendChild(w);
+  }
+}
+
+// Build M3U from current state.channels
+function buildM3UFromChannels(includeLogos=true) {
+  let out = '#EXTM3U\n';
+  for (const ch of state.channels) {
+    const idAttr = ch.tvgId ? ` tvg-id="${escapeAttr(ch.tvgId)}"` : '';
+    const nameAttr = ch.tvgName ? ` tvg-name="${escapeAttr(ch.tvgName)}"` : '';
+    const logoAttr = (includeLogos && ch.tvgLogo) ? ` tvg-logo="${escapeAttr(ch.tvgLogo)}"` : '';
+    const ext = `#EXTINF:-1${idAttr}${nameAttr}${logoAttr},${(ch.name||'').replace(/\n/g,' ')}`;
+    out += ext + '\n' + (ch.url||'') + '\n';
+  }
+  return out;
+}
+function escapeAttr(s) { return (s||'').replace(/"/g,'&quot;'); }
+
+// Export M3U
+exportBtn.addEventListener('click', () => {
+  const txt = buildM3UFromChannels();
+  downloadText(txt, 'eggepg_playlist.m3u');
+});
+
+// Download utility
+function downloadText(text, filename) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+
+// Save/Load project buttons
+saveProjectBtn.addEventListener('click', () => {
+  const proj = {
+    channels: state.channels,
+    xmltv: state.xmltv,
+    settings: state.settings,
+    m3uText: m3uEditor.value || m3uInput.value || ''
+  };
+  try {
+    localStorage.setItem('eggepg_project', JSON.stringify(proj));
+    alert('Project saved to localStorage');
+  } catch(e) { alert('Save failed: ' + e.message); }
+});
+loadProjectBtn.addEventListener('click', () => {
+  const raw = localStorage.getItem('eggepg_project');
+  if (!raw) return alert('No saved project in localStorage');
+  try {
+    const proj = JSON.parse(raw);
+    state.channels = proj.channels || [];
+    state.xmltv = proj.xmltv || {channels:[], loaded:false};
+    state.settings = proj.settings || state.settings;
+    if (proj.m3uText) { m3uEditor.value = proj.m3uText; m3uInput.value = proj.m3uText; }
+    renderChannelList();
+    alert('Project loaded');
+  } catch(e) { alert('Load failed: ' + e.message); }
+});
+clearProjectBtn.addEventListener('click', () => {
+  if (!confirm('Clear local project and localStorage?')) return;
+  state.channels = []; state.xmltv = {channels:[], loaded:false}; state.settings = {theme:'light'};
+  localStorage.removeItem('eggepg_project');
+  m3uInput.value = ''; m3uEditor.value = '';
+  document.body.setAttribute('data-theme', 'light');
+  toggleThemeBtn.textContent = 'Dark';
+  renderChannelList();
+});
+
+// Export/import project JSON
+exportProjectBtn.addEventListener('click', () => {
+  const proj = { channels: state.channels, xmltv: state.xmltv, settings: state.settings };
+  downloadText(JSON.stringify(proj, null, 2), 'eggepg_project.json');
+});
+importProjectBtn.addEventListener('click', () => projFile.click());
+projFile.addEventListener('change', (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const proj = JSON.parse(ev.target.result);
+      if (!proj) return alert('Invalid project file');
+      state.channels = proj.channels || [];
+      state.xmltv = proj.xmltv || {channels:[],loaded:false};
+      state.settings = proj.settings || state.settings;
+      renderChannelList();
+      alert('Project imported');
+    } catch(err){ alert('Import failed: ' + err.message); }
+  };
+  reader.readAsText(f);
+});
+
+// XMLTV load and auto-matching
+loadXmlBtn.addEventListener('click', () => {
+  const f = fileXml.files[0]; if (!f) return alert('Choose an XMLTV file first');
+  const r = new FileReader();
+  r.onload = (e) => {
+    try {
+      const txt = e.target.result;
+      // parse XML: we read channel display-name and id
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(txt, 'application/xml');
+      const chNodes = doc.getElementsByTagName('channel');
+      const list = [];
+      for (let i=0;i<chNodes.length;i++){
+        const node = chNodes[i];
+        const id = node.getAttribute('id') || '';
+        const dn = node.getElementsByTagName('display-name')[0];
+        const name = dn ? (dn.textContent || '') : '';
+        list.push({ id, name });
+      }
+      state.xmltv.channels = list;
+      state.xmltv.loaded = true;
+      xmlInfo.textContent = 'Loaded XMLTV with ' + list.length + ' channels';
+    } catch(err){
+      xmlInfo.textContent = 'XML parse error: ' + err.message;
+    }
+  };
+  r.readAsText(f);
+});
+
+// fuzzy matching: simple scoring by string similarity
+autoMatchBtn.addEventListener('click', () => {
+  if (!state.xmltv.loaded) return alert('Load an XMLTV file first');
+  let matched = 0;
+  for (const ch of state.channels) {
+    if (ch.tvgId && ch.tvgId.trim() !== '') continue; // skip already has id
+    // compute best match
+    let best = {score: -1, id: ''};
+    for (const x of state.xmltv.channels) {
+      const s = similarity(normalizeName(ch.name), normalizeName(x.name || x.id || ''));
+      if (s > best.score) { best.score = s; best.id = x.id; }
+    }
+    // threshold 0.45 to be safe
+    if (best.score >= 0.45) {
+      ch.tvgId = best.id;
+      ch.tvgName = ch.tvgName || ''; // keep display name as is
+      matched++;
+    }
+  }
+  renderChannelList();
+  alert('Auto match complete. Matched ' + matched + ' channels.');
+  m3uEditor.value = buildM3UFromChannels();
+});
+
+// normalize names
+function normalizeName(s) {
+  if (!s) return '';
+  return s.toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+}
+
+// simple normalized string similarity (Jaccard-ish on tokens)
+function similarity(a,b){
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const ta = a.split(/\s+/); const tb = b.split(/\s+/);
+  const setA = new Set(ta); const setB = new Set(tb);
+  const intersection = [...setA].filter(x=>setB.has(x)).length;
+  const union = new Set([...ta,...tb]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+// Xtream builder
+buildXtreamBtn.addEventListener('click', () => {
+  const host = xcHost.value.trim();
+  const user = xcUser.value.trim();
+  const pass = xcPass.value.trim();
+  if (!host || !user || !pass) { xtreamOut.textContent = 'Fill host, username, password'; return; }
+  const h = host.endsWith('/') ? host.slice(0,-1) : host;
+  const url = `${h}/get.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&type=m3u_plus&output=ts`;
+  xtreamOut.textContent = url;
+});
+
+buildXtreamM3UBtn.addEventListener('click', () => {
+  const url = (xtreamOut.textContent || '').trim();
+  if (!url) { alert('Generate Xtream URL first'); return; }
+  const sample = '#EXTM3U\n#EXTINF:-1,My Xtream Playlist\n' + url + '\n';
+  m3uEditor.value = sample;
+  parseM3UText(sample);
+});
+
+// Toggle theme
+toggleThemeBtn.addEventListener('click', () => {
+  state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark';
+  document.body.setAttribute('data-theme', state.settings.theme);
+  toggleThemeBtn.textContent = state.settings.theme === 'dark' ? 'Light' : 'Dark';
+  try { localStorage.setItem('eggepg_theme', state.settings.theme); } catch(e){}
+});
+
+// Utility: build M3U when export or to editor
+function buildM3UFromChannels() {
+  return buildM3UFromChannelsWithOptions(true);
+}
+function buildM3UFromChannelsWithOptions(includeLogos) {
+  let out = '#EXTM3U\n';
+  for (const ch of state.channels) {
+    const idAttr = ch.tvgId ? ` tvg-id="${escapeAttr(ch.tvgId)}"` : '';
+    const nameAttr = ch.tvgName ? ` tvg-name="${escapeAttr(ch.tvgName)}"` : '';
+    const logoAttr = (includeLogos && ch.tvgLogo) ? ` tvg-logo="${escapeAttr(ch.tvgLogo)}"` : '';
+    const ext = `#EXTINF:-1${idAttr}${nameAttr}${logoAttr},${(ch.name||'').replace(/\n/g,' ')}`;
+    out += ext + '\n' + (ch.url||'') + '\n';
+  }
+  return out;
+}
+function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
+
+// Validation quick check: we reuse validateM3U above
+function basicValidationAndShow() {
+  const text = m3uEditor.value.trim() || m3uInput.value.trim();
+  if (!text) return alert('No M3U to validate');
+  const res = validateM3U(text);
+  validatorResult.style.display = 'block';
+  let html = `<div><b>Channels</b>: ${res.channelCount} &nbsp; <b>OK</b>: ${res.ok ? 'yes' : 'no'}</div>`;
+  if (res.errors.length) html += '<div style="color:#b91c1c"><b>Errors</b>:<br>' + res.errors.map(e=>escapeHtml(e)).join('<br>') + '</div>';
+  if (res.warnings.length) html += '<div style="color:#92400e"><b>Warnings</b>:<br>' + res.warnings.map(e=>escapeHtml(e)).join('<br>') + '</div>';
+  validatorResult.innerHTML = html;
+}
+
+// Wire validate button
+validateBtn.addEventListener('click', basicValidationAndShow);
+
+// Update counts
+function updateCounts() {
+  chanCount.textContent = String(state.channels.length || 0);
+}
+
+// When channel list changes, sync editor text
+function syncEditorFromState() {
+  m3uEditor.value = buildM3UFromChannels();
+}
+
+// Some helper to set m3uEditor from state
+m3uEditor.addEventListener('change', () => {
+  // when user edits text manually, re-parse if they ask to
+});
+
+// Utility functions
+function downloadTextFile(text, name) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+}
+
+// XMlTV mapping guidance: if user has xmltv loaded, we already added auto match
+// Additional UX: when user clicks parse, also update editor
+exportBtn.addEventListener('click', () => {
+  syncEditorFromState();
+  downloadTextFile(m3uEditor.value, 'eggepg_playlist.m3u');
+});
+
+// small helper for image fetch check - used earlier
+async function imageExistsFast(url) {
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    return r.ok;
+  } catch(e) {
+    try { const r2 = await fetch(url); return r2.ok && (r2.headers.get('content-type')||'').startsWith('image'); } catch(e2) { return false; }
+  }
+}
+
+// Basic M3U validator reused by CLI and UI
+function validateM3U(text) {
+  const lines = text.split(/\r?\n/);
+  const result = { ok: true, errors: [], warnings: [], channelCount: 0 };
+  if (!lines[0] || !lines[0].includes('#EXTM3U')) {
+    result.ok = false;
+    result.errors.push('Missing #EXTM3U header');
+  }
+  let expectUrl = false;
+  for (let i=0;i<lines.length;i++){
+    const l = lines[i].trim();
+    if (!l) continue;
+    if (l.startsWith('#EXTINF')) { expectUrl = true; }
+    else if (l.startsWith('#')) { /* ignore */ }
+    else {
+      // url line
+      if (expectUrl) { result.channelCount++; expectUrl = false; }
+      if (!isValidUrl(l)) result.warnings.push('Possibly invalid URL at line ' + (i+1) + ': ' + l);
+    }
+  }
+  if (expectUrl) result.errors.push('Trailing #EXTINF without a following URL');
+  if (result.errors.length) result.ok = false;
+  return result;
+}
+
+function isValidUrl(s) {
+  try { new URL(s); return true; } catch(e) { return false; }
+}
+
+// when user parsed M3U earlier we already fill state.channels; sync editor clicking parse uses function
+function parseM3UFromEditor() {
+  const txt = m3uEditor.value.trim();
+  if (!txt) return;
+  parseM3UText(txt);
+}
+
+// When user edits channels via UI, update m3uEditor
+function renderAndSync() {
+  renderChannelList();
+  m3uEditor.value = buildM3UFromChannels();
+}
+
+// initial render call for any preloaded state
+renderChannelList();
+
+// Hook parse button to parse from editor on demand
+qs('#parseBtn').addEventListener('click', () => parseM3UFromEditor());
+
+// Hook generate ids to update and sync
+generateIdsBtn.addEventListener('click', () => { m3uEditor.value = buildM3UFromChannels(); });
+
+// Auto-match note: mapping uses simple token similarity
+function autoMatchEPGIDs() {
+  if (!state.xmltv.loaded) return alert('Load an XMLTV file first');
+  autoMatchBtn.click();
+}
+
+// Finally expose some debug controls for console use
+window.EggEPG = {
+  state,
+  parseM3UText,
+  buildM3UFromChannels,
+  renderChannelList,
+  validateM3U,
+  autoMatchEPGIDs
+};
+
+})();
 </script>
 </body>
 </html>
