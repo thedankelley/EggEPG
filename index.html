@@ -1,286 +1,701 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>EPG Editor (Client-Side)</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Client-side IPTV EPG Editor — All Features</title>
+
+<!-- External libs (CDN) -->
+<script src="https://unpkg.com/fuse.js@6.6.2/dist/fuse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        margin: 20px;
-        background: #f4f4f4;
-    }
-    h1 { text-align: center; }
-    .section {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .channel-list, .epg-list {
-        max-height: 300px;
-        overflow-y: scroll;
-        border: 1px solid #ccc;
-        background: #fafafa;
-        padding: 10px;
-        font-size: 14px;
-    }
-    button {
-        padding: 8px 14px;
-        margin: 5px 0;
-        cursor: pointer;
-    }
-    input[type=text], input[type=url], textarea {
-        width: 100%;
-        padding: 6px;
-        margin: 5px 0 10px 0;
-    }
+  :root{
+    --bg:#f4f6f8; --card:#fff; --muted:#666; --accent:#0b79d0;
+    --panel-shadow:0 4px 16px rgba(2,8,23,0.08);
+  }
+  [data-theme="dark"]{
+    --bg:#0b0f14; --card:#0f1720; --muted:#9aa4b2; --accent:#58a6ff;
+    color: #dbe7ff;
+  }
+  html,body{height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); color: #0b1722;}
+  [data-theme="dark"] body{color:var(--dcolor,#dbe7ff);}
+  .wrap{max-width:1200px;margin:16px auto;padding:16px}
+  header{display:flex;gap:12px;align-items:center;justify-content:space-between}
+  h1{margin:0;font-size:20px}
+  .row{display:flex;gap:12px;align-items:flex-start}
+  .card{background:var(--card); border-radius:10px; padding:12px; box-shadow:var(--panel-shadow); flex:1; min-width:0;}
+  button{background:var(--accent); color:white; border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
+  input,select,textarea{padding:8px;border-radius:6px;border:1px solid #d5dce6;width:100%;box-sizing:border-box}
+  small{color:var(--muted)}
+  .two{display:flex; gap:12px}
+  .panel-short{flex:0 0 320px}
+  .filelist{max-height:140px; overflow:auto; border:1px dashed #dce6f2; padding:8px;border-radius:6px;background:linear-gradient(180deg,#fff,#fbfdff);}
+  .list-item{padding:6px;border-bottom:1px solid #f1f4f8;display:flex;justify-content:space-between;align-items:center}
+  .tiny{font-size:12px;color:var(--muted)}
+  .mapping-row{display:flex;gap:8px;align-items:center}
+  .map-btn{background:#e6f2ff;color:#044f86;border-radius:6px;padding:6px 8px;border:0}
+  .epg-grid{overflow:auto;border-radius:8px;padding:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
+  .timeline{display:flex; gap:8px}
+  .timeline-col{min-width:220px;border-left:1px solid #eef3f7;padding:8px}
+  .hour{font-weight:600;margin-bottom:6px}
+  .event{position:relative;background:linear-gradient(180deg,#f0f8ff,#dff2ff);border-radius:6px;padding:6px;margin-bottom:8px;cursor:grab}
+  .event.dragging{opacity:0.6}
+  .conflict{background:#fff6f6;border:1px solid #ffcccc;padding:8px;border-radius:6px;margin-bottom:8px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  footer{margin-top:12px;text-align:center;color:var(--muted);font-size:13px}
+  .dark-toggle{background:transparent;border:1px solid #cfe3ff;padding:6px 8px;border-radius:6px}
+  @media (max-width:900px){ .row{flex-direction:column} .panel-short{width:100%}}
 </style>
 </head>
-<body>
-<h1>Client-Side IPTV EPG Editor</h1>
+<body data-theme="light">
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Client-side IPTV EPG Editor — All features</h1>
+      <small>All work is done in your browser. Nothing is uploaded unless you fetch remote XMLTV or call TVmaze for enrichment.</small>
+    </div>
+    <div class="controls">
+      <button id="saveProject">Save Project</button>
+      <button id="loadProject">Load Project</button>
+      <button id="clearProject">Clear</button>
+      <button id="downloadGz">Export XMLTV .xml.gz</button>
+      <button id="downloadXml">Export XMLTV .xml</button>
+      <button id="downloadM3U">Export M3U</button>
+      <button id="minifyBtn">Get Minified</button>
+      <button class="dark-toggle" id="toggleTheme">Dark</button>
+    </div>
+  </header>
 
-<div class="section">
-    <h2>1. Load M3U Playlist</h2>
-    <input type="file" id="m3uFile">
-    <button onclick="loadM3U()">Load M3U</button>
-    <div id="m3uInfo"></div>
-</div>
+  <main class="row" style="margin-top:12px">
+    <aside class="card panel-short">
+      <h3>Sources & Files</h3>
+      <label class="tiny">Add XMLTV URL (CORS-permitting):</label>
+      <div style="display:flex;gap:8px">
+        <input id="xmlUrl" type="url" placeholder="https://example.com/my.xml">
+        <button id="addXmlUrl">Add</button>
+      </div>
+      <hr/>
+      <label class="tiny">Upload XMLTV file(s):</label>
+      <input id="xmlFiles" type="file" multiple accept=".xml,.xml.gz" />
+      <label class="tiny">Upload M3U playlist:</label>
+      <input id="m3uFile" type="file" accept=".m3u,.txt" />
+      <div style="height:8px"></div>
+      <div class="filelist" id="sourceList"></div>
 
-<div class="section">
-    <h2>2. Load XMLTV EPG Sources</h2>
-    <input type="url" id="xmltvUrl" placeholder="Enter XMLTV URL">
-    <button onclick="fetchXMLTV()">Fetch XMLTV</button>
+      <hr/>
+      <h4>Source Priority</h4>
+      <small>Drag to reorder priority (top = highest).</small>
+      <div id="sourcePriority" style="margin-top:8px"></div>
 
-    <p>Or upload local XMLTV:</p>
-    <input type="file" id="xmltvFile">
-    <button onclick="loadXMLTV()">Load XMLTV</button>
+      <hr/>
+      <h4>Merge Options</h4>
+      <label><input type="checkbox" id="mergePreferLongerDesc" checked/> Prefer longer description when merging</label><br/>
+      <label><input type="checkbox" id="mergePreferHigherPriority" checked/> Prefer higher priority source on conflicts</label>
+    </aside>
 
-    <div id="xmltvInfo"></div>
-</div>
+    <section class="card" style="flex:2">
+      <h3>Channel Mapping</h3>
+      <div class="two">
+        <div style="flex:1">
+          <label class="tiny">M3U Channels</label>
+          <div class="filelist" id="m3uList"></div>
+        </div>
+        <div style="flex:1">
+          <label class="tiny">XMLTV Channels</label>
+          <div class="filelist" id="xmltvList"></div>
+        </div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <input id="fuseQuery" placeholder="Search M3U name or XMLTV display-name"/>
+        <button id="autoMap">Auto-match (fuzzy)</button>
+        <button id="manualMap">Map Selected → Selected</button>
+        <button id="unmap">Unmap Selected</button>
+        <button id="showConflicts">Resolve Conflicts</button>
+      </div>
+      <div style="margin-top:8px">
+        <label class="tiny">Mappings (M3U name → XMLTV id)</label>
+        <div id="mappings" class="filelist"></div>
+      </div>
 
-<div class="section">
-    <h2>3. Channel Mapping</h2>
-    <button onclick="autoMapChannels()">Auto-Match</button>
-    <div id="mappingResults"></div>
-</div>
+      <hr/>
+      <h3>EPG Timeline</h3>
+      <small>Drag events horizontally to nudge start time. Click event to edit/enrich via TVmaze.</small>
+      <div class="epg-grid" id="epgGrid" style="height:420px"></div>
 
-<div class="section">
-    <h2>4. EPG Editor</h2>
-    <div id="epgList" class="epg-list"></div>
-</div>
+      <hr/>
+      <h3>Conflict Resolver</h3>
+      <div id="conflictPanel"></div>
+    </section>
+  </main>
 
-<div class="section">
-    <h2>5. Export</h2>
-    <button onclick="exportXMLTV()">Export XMLTV</button>
-    <button onclick="exportM3U()">Export M3U</button>
-    <div id="exportMsg"></div>
+  <footer>
+    Built for you — client-side only. Use GitHub Pages to host this file as `index.html`.
+  </footer>
 </div>
 
 <script>
-/* ------------------------------
-    GLOBAL STATE
---------------------------------*/
-let m3uChannels = [];
-let epgEvents = [];       // list of all EPG programs
-let xmltvChannels = [];   // parsed XMLTV channels
-let channelMap = {};      // m3uName -> xmltvChannelId
+/* ============================
+   CLIENT STATE & UTILITIES
+   ============================ */
+const state = {
+  sources: [],     // {id, name, type:'url'|'file', url, xmlDoc, priority, enabled}
+  m3uChannels: [], // {name,tvgId,url,rawLine}
+  xmltvChannels: [], // {id,displayName,node}
+  events: [],      // canonical events: {id,channel,start,stop,title,desc,sourceId}
+  mappings: {},    // m3uName -> xmltvId
+  theme: localStorage.getItem('epg_theme') || 'light'
+};
+document.body.setAttribute('data-theme', state.theme);
+document.getElementById('toggleTheme').innerText = state.theme==='dark'?'Light':'Dark';
 
-/* ------------------------------
-    M3U PARSER
---------------------------------*/
-function parseM3U(text) {
-    const lines = text.split("\n");
-    const channels = [];
-    let current = {};
+/* Simple helpers */
+const uid = (p='id') => p+'_'+Math.random().toString(36).slice(2,9);
+const xs = s => document.querySelector(s);
+const downloadBlob = (blob, name) => {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
 
-    for (let line of lines) {
-        line = line.trim();
-
-        if (line.startsWith("#EXTINF")) {
-            const name = line.split(",").slice(1).join(",");
-            const tvgIdMatch = line.match(/tvg-id="([^"]+)"/);
-            current = {
-                name,
-                tvgId: tvgIdMatch ? tvgIdMatch[1] : ""
-            };
-        } else if (line.startsWith("http")) {
-            current.url = line;
-            channels.push(current);
-            current = {};
-        }
-    }
-    return channels;
+/* ============================
+   SOURCE MANAGEMENT
+   ============================ */
+function renderSourceList(){
+  const el = xs('#sourceList'); el.innerHTML = '';
+  state.sources.forEach((s, i) => {
+    const div = document.createElement('div'); div.className='list-item';
+    div.innerHTML = `<div>
+      <strong>${s.name||s.url||'XMLTV'}</strong><br><small class="tiny">${s.type}</small>
+    </div>
+    <div style="text-align:right">
+      <button onclick="fetchSource('${s.id}')">Sync</button>
+      <button onclick="toggleSource('${s.id}')">${s.enabled? 'Disable':'Enable'}</button>
+      <button onclick="removeSource('${s.id}')">Remove</button>
+    </div>`;
+    el.appendChild(div);
+  });
+  renderSourcePriority();
 }
 
-function loadM3U() {
-    const file = document.getElementById("m3uFile").files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-        m3uChannels = parseM3U(reader.result);
-        document.getElementById("m3uInfo").innerText =
-            `Loaded ${m3uChannels.length} channels`;
-    };
-    reader.readAsText(file);
+function renderSourcePriority(){
+  const el = xs('#sourcePriority'); el.innerHTML='';
+  state.sources.sort((a,b)=> (a.priority||0)-(b.priority||0));
+  state.sources.forEach(s=>{
+    const d = document.createElement('div'); d.className='list-item';
+    d.innerHTML = `<div style="flex:1">${s.name||s.url}</div>
+      <div><input type="number" value="${s.priority||50}" style="width:72px" onchange="setPriority('${s.id}',this.value)"/></div>`;
+    el.appendChild(d);
+  });
 }
 
-/* ------------------------------
-    XMLTV PARSER
---------------------------------*/
-function parseXMLTV(text) {
+function setPriority(id,val){ const s=state.sources.find(x=>x.id===id); if(!s) return; s.priority = Number(val); renderSourcePriority(); }
+
+// add URL
+xs('#addXmlUrl').addEventListener('click', ()=>{
+  const url = xs('#xmlUrl').value.trim();
+  if(!url){ alert('enter an xmltv url'); return; }
+  const id = uid('src');
+  state.sources.push({id, name:url, type:'url', url, priority:50, enabled:true});
+  xs('#xmlUrl').value='';
+  renderSourceList();
+});
+
+// upload files
+xs('#xmlFiles').addEventListener('change', async (ev)=>{
+  const files = [...ev.target.files];
+  for(const f of files){
+    const id = uid('srcf');
+    const name = f.name;
+    const text = await readFileAsText(f);
+    const xmlDoc = parseXmlString(text);
+    state.sources.push({id, name, type:'file', fileName:name, raw:text, xmlDoc, priority:50, enabled:true});
+    // also extract channels/events
+    extractXmltv(xmlDoc, id);
+  }
+  renderSourceList(); renderXmltvList(); renderM3UList(); renderMappings();
+});
+
+// M3U upload
+xs('#m3uFile').addEventListener('change', async (ev)=>{
+  const f = ev.target.files[0]; if(!f) return;
+  const text = await readFileAsText(f);
+  parseM3U(text); renderM3UList(); renderMappings();
+});
+
+/* read util */
+function readFileAsText(file){
+  return new Promise(resolve=>{
+    const r = new FileReader();
+    r.onload = ()=> resolve(r.result);
+    r.readAsText(file);
+  });
+}
+
+/* parse xml helper */
+function parseXmlString(text){
+  try{
+    // handle gzipped xml? skip for now (we accept raw)
     const parser = new DOMParser();
-    const xml = parser.parseFromString(text, "text/xml");
-
-    const channels = [...xml.getElementsByTagName("channel")];
-    const programmes = [...xml.getElementsByTagName("programme")];
-
-    xmltvChannels = channels.map(ch => ({
-        id: ch.getAttribute("id"),
-        name: ch.getElementsByTagName("display-name")[0]?.textContent || ""
-    }));
-
-    programmes.forEach(p => {
-        epgEvents.push({
-            channel: p.getAttribute("channel"),
-            start: p.getAttribute("start"),
-            stop: p.getAttribute("stop"),
-            title: p.getElementsByTagName("title")[0]?.textContent || "",
-            desc: p.getElementsByTagName("desc")[0]?.textContent || ""
-        });
-    });
+    const doc = parser.parseFromString(text, 'application/xml');
+    return doc;
+  }catch(e){ console.warn('xml parse', e); return null; }
 }
 
-async function fetchXMLTV() {
-    const url = document.getElementById("xmltvUrl").value;
-    if (!url) return;
+/* fetch remote URL (CORS-permitting) */
+async function fetchSource(id){
+  const src = state.sources.find(s=>s.id===id);
+  if(!src || src.type!=='url') return;
+  try{
+    const r = await fetch(src.url);
+    const text = await r.text();
+    src.raw = text;
+    src.xmlDoc = parseXmlString(text);
+    extractXmltv(src.xmlDoc, id);
+    alert('Fetched and parsed: ' + src.name);
+    renderXmltvList(); renderM3UList(); renderMappings();
+  }catch(e){ alert('Fetch failed (CORS?) - check console'); console.error(e); }
+}
 
-    try {
-        const res = await fetch(url);
-        const text = await res.text();
-        parseXMLTV(text);
-        document.getElementById("xmltvInfo").innerText =
-            `Loaded ${xmltvChannels.length} channels, ${epgEvents.length} events`;
-    } catch (e) {
-        alert("Failed: " + e.message);
+function toggleSource(id){
+  const s = state.sources.find(x=>x.id===id); if(!s) return; s.enabled = !s.enabled; renderSourceList();
+}
+function removeSource(id){
+  state.sources = state.sources.filter(x=>x.id!==id);
+  // also drop events from that source
+  state.events = state.events.filter(e=>e.sourceId!==id);
+  renderSourceList(); renderXmltvList(); renderM3UList();
+}
+
+/* extract channels and programmes from xmlDoc */
+function extractXmltv(xmlDoc, sourceId){
+  if(!xmlDoc) return;
+  const chNodes = xmlDoc.getElementsByTagName('channel');
+  for(const ch of chNodes){
+    const id = ch.getAttribute('id');
+    const display = ch.getElementsByTagName('display-name')[0]?.textContent || id;
+    // avoid duplicates
+    if(!state.xmltvChannels.some(x=>x.id===id)) state.xmltvChannels.push({id, displayName:display, node:ch});
+  }
+  const progNodes = xmlDoc.getElementsByTagName('programme');
+  for(const p of progNodes){
+    const channel = p.getAttribute('channel');
+    const start = p.getAttribute('start'), stop = p.getAttribute('stop');
+    const title = p.getElementsByTagName('title')[0]?.textContent || '';
+    const desc = p.getElementsByTagName('desc')[0]?.textContent || '';
+    const ev = {id: uid('ev'), channel, start, stop, title, desc, sourceId:sourceId};
+    state.events.push(ev);
+  }
+}
+
+/* ============================
+   M3U PARSING & UI
+   ============================ */
+function parseM3U(text){
+  const lines = text.split(/\r?\n/);
+  const chs = [];
+  let current = null;
+  for(const raw of lines){
+    const line = raw.trim();
+    if(!line) continue;
+    if(line.startsWith('#EXTINF')){
+      const meta = line;
+      const name = meta.split(',').slice(1).join(',').trim();
+      const tvgId = (meta.match(/tvg-id="([^"]+)"/) || [])[1] || '';
+      current = {name, tvgId, rawMeta:meta};
+    } else if(line.startsWith('#')) {
+      continue;
+    } else {
+      // url
+      if(current){
+        current.url = line;
+        chs.push(current);
+        current = null;
+      } else {
+        // unknown entry (maybe bare url)
+        chs.push({name:line, url:line, tvgId:''});
+      }
     }
+  }
+  state.m3uChannels = chs;
 }
 
-function loadXMLTV() {
-    const file = document.getElementById("xmltvFile").files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-        parseXMLTV(reader.result);
-        document.getElementById("xmltvInfo").innerText =
-            `Loaded ${xmltvChannels.length} channels, ${epgEvents.length} events`;
-    };
-    reader.readAsText(file);
+/* render lists */
+function renderM3UList(){
+  const el = xs('#m3uList'); el.innerHTML='';
+  state.m3uChannels.forEach((m, i)=>{
+    const d = document.createElement('div'); d.className='list-item';
+    d.innerHTML = `<div><strong>${m.name}</strong><div class="tiny">${m.tvgId||''}</div></div>
+      <div><button onclick="selectM3U(${i})">Select</button></div>`;
+    el.appendChild(d);
+  });
+  renderMappings();
+}
+function renderXmltvList(){
+  const el = xs('#xmltvList'); el.innerHTML='';
+  state.xmltvChannels.forEach((x,i)=>{
+    const d = document.createElement('div'); d.className='list-item';
+    d.innerHTML = `<div><strong>${x.displayName}</strong><div class="tiny">${x.id}</div></div>
+      <div><button onclick="selectXMLTV(${i})">Select</button></div>`;
+    el.appendChild(d);
+  });
 }
 
-/* ------------------------------
-    AUTO MAPPING
---------------------------------*/
-function autoMapChannels() {
-    channelMap = {};
+/* selection helpers */
+let selectedM3U = null, selectedXMLTV = null;
+function selectM3U(i){ selectedM3U = state.m3uChannels[i]; highlightSelections(); }
+function selectXMLTV(i){ selectedXMLTV = state.xmltvChannels[i]; highlightSelections(); }
+function highlightSelections(){
+  // just show names in mappings container
+  const el = xs('#mappings'); el.innerHTML = `<div class="tiny">Selected M3U: ${selectedM3U?.name||'none'}<br>Selected XMLTV: ${selectedXMLTV?.displayName||'none'}</div>`;
+}
 
-    m3uChannels.forEach(m => {
-        const match = xmltvChannels.find(x =>
-            x.name.toLowerCase().includes(m.name.toLowerCase())
-        );
-        if (match) channelMap[m.name] = match.id;
+/* mapping actions */
+xs('#manualMap').addEventListener('click', ()=>{
+  if(!selectedM3U || !selectedXMLTV) return alert('Select both M3U and XMLTV items');
+  state.mappings[selectedM3U.name] = selectedXMLTV.id;
+  renderMappings();
+});
+xs('#unmap').addEventListener('click', ()=>{
+  if(!selectedM3U) return alert('Select M3U item');
+  delete state.mappings[selectedM3U.name];
+  renderMappings();
+});
+xs('#autoMap').addEventListener('click', ()=> autoMap());
+
+function renderMappings(){
+  const el = xs('#mappings'); el.innerHTML='';
+  for(const k in state.mappings){
+    const v = state.mappings[k];
+    const row = document.createElement('div'); row.className='list-item';
+    row.innerHTML = `<div>${k} → <strong>${v}</strong></div>
+      <div><button onclick="unmapKey('${encodeURIComponent(k)}')">X</button></div>`;
+    el.appendChild(row);
+  }
+}
+function unmapKey(k){ delete state.mappings[decodeURIComponent(k)]; renderMappings(); }
+
+/* fuzzy auto-map using Fuse.js */
+function autoMap(){
+  if(!window.Fuse) return alert('Fuse.js missing');
+  // prepare xmltv names
+  const list = state.xmltvChannels.map(x=>({id:x.id,name:x.displayName}));
+  const fuse = new Fuse(list, {keys:['id','name'], threshold:0.4});
+  state.m3uChannels.forEach(m=>{
+    const q = m.tvgId || m.name;
+    const res = fuse.search(q);
+    if(res && res[0]) state.mappings[m.name] = res[0].item.id;
+  });
+  renderMappings();
+}
+
+/* ============================
+   Merging & Conflict Detection
+   ============================ */
+function computeMergedEvents(){
+  // filter enabled sources
+  const enabledSources = state.sources.filter(s=>s.enabled).map(s=>s.id);
+  // select events from enabled sources & mapped channels
+  const evs = state.events.filter(e => enabledSources.includes(e.sourceId));
+  // optionally remap by m3u -> xmltv mapping: we only include events for mapped xmltv IDs
+  const mappedXmltvIds = new Set(Object.values(state.mappings));
+  const filtered = evs.filter(e => mappedXmltvIds.has(e.channel));
+  // group by channel & timeslot (start)
+  const groups = {};
+  for(const e of filtered){
+    const key = e.channel+'|'+e.start;
+    groups[key] = groups[key]||[];
+    groups[key].push(e);
+  }
+  // produce merged: prefer by priority (lower number = higher priority) or override logic
+  const preferHigherPriority = xs('#mergePreferHigherPriority').checked;
+  const preferLongDesc = xs('#mergePreferLongerDesc').checked;
+  const merged = [];
+  Object.values(groups).forEach(arr=>{
+    if(arr.length===1) { merged.push({...arr[0]}); return; }
+    // conflict
+    // sort arr by source priority
+    const withPriority = arr.map(a=>{
+      const src = state.sources.find(s=>s.id===a.sourceId) || {};
+      return {...a, priority: src.priority||50, srcName: src.name||src.url||a.sourceId};
     });
-
-    let html = "<ul>";
-    for (let m of m3uChannels) {
-        html += `<li>${m.name} → ${channelMap[m.name] || "NOT FOUND"}</li>`;
+    withPriority.sort((A,B)=> (A.priority||50)-(B.priority||50));
+    // create merged record
+    let chosen = withPriority[0];
+    let desc = chosen.desc||'';
+    if(preferLongDesc){
+      const longest = withPriority.reduce((acc,x)=> x.desc && (x.desc.length> (acc.desc||'').length) ? x:acc, withPriority[0]);
+      desc = longest.desc || desc;
+    } else {
+      // concatenate unique descriptions
+      desc = [...new Set(withPriority.map(x=>x.desc).filter(Boolean))].join('\n\n');
     }
-    html += "</ul>";
-
-    document.getElementById("mappingResults").innerHTML = html;
-
-    renderEPG();
+    merged.push({...chosen, desc, conflict: withPriority.length>1, candidates: withPriority});
+  });
+  return merged;
 }
 
-/* ------------------------------
-    RENDER / EDIT EPG
---------------------------------*/
-function renderEPG() {
-    let html = "";
+/* show conflicts UI */
+xs('#showConflicts').addEventListener('click', ()=> {
+  const merged = computeMergedEvents();
+  const conflicts = merged.filter(m=>m.conflict);
+  const panel = xs('#conflictPanel'); panel.innerHTML = '';
+  if(conflicts.length===0) { panel.innerHTML = '<div class="tiny">No conflicts</div>'; return; }
+  conflicts.forEach(c=>{
+    const div = document.createElement('div'); div.className='conflict';
+    div.innerHTML = `<strong>${c.title}</strong> <div class="tiny">${c.start} → ${c.stop}</div>
+      <div style="margin-top:6px"><small>Candidates:</small></div>`;
+    c.candidates.forEach(can=>{
+      const s = state.sources.find(x=>x.id===can.sourceId);
+      const srcName = s?.name || can.sourceId;
+      const item = document.createElement('div'); item.style.display='flex'; item.style.justifyContent='space-between'; item.style.marginTop='6px';
+      item.innerHTML = `<div><b>${can.title}</b><div class="tiny">${can.desc?.slice(0,200)}</div></div>
+        <div><button onclick='chooseCandidate("${c.id}","${can.id}")'>Choose</button></div>`;
+      div.appendChild(item);
+    });
+    panel.appendChild(div);
+  });
+});
+window.chooseCandidate = (mergedId, candidateId) => {
+  // mark chosen candidate by making it unique in events (we'll set source priority by setting low priority)
+  // Simpler: copy chosen candidate as single event and remove others for same slot
+  const mergedList = computeMergedEvents();
+  const m = mergedList.find(mm=>mm.id===mergedId);
+  if(!m) return alert('merged not found');
+  const slotCandidates = m.candidates;
+  const chosen = slotCandidates.find(s=>s.id===candidateId);
+  if(!chosen) return alert('candidate not found');
+  // remove events in that channel/start except chosen.id
+  state.events = state.events.filter(e=> !(e.channel===m.channel && e.start===m.start && e.id!==chosen.id));
+  alert('Chosen candidate applied. Recompute timeline.');
+  renderTimeline();
+}
 
-    epgEvents.forEach((ev, i) => {
-        html += `
-        <div style="padding:6px;border-bottom:1px solid #ddd">
-            <b>${ev.title}</b><br>
-            <i>${ev.start} → ${ev.stop}</i><br>
-            <textarea onchange="editEvent(${i}, this.value)">${ev.desc}</textarea>
+/* ============================
+   TIMELINE RENDER & EDIT
+   ============================ */
+function renderTimeline(){
+  const box = xs('#epgGrid'); box.innerHTML='';
+  const merged = computeMergedEvents();
+  if(merged.length===0) { box.innerHTML = '<div class="tiny">No events to show — map channels and sync sources.</div>'; return; }
+  // group by channel
+  const byChannel = {};
+  merged.forEach(ev=>{ (byChannel[ev.channel]=byChannel[ev.channel]||[]).push(ev); });
+  // create timeline columns per mapped M3U channels
+  const cols = document.createElement('div'); cols.className='timeline';
+  const mapped = Object.entries(state.mappings);
+  if(mapped.length===0) { box.innerHTML = '<div class="tiny">No mappings — map M3U channels to XMLTV first.</div>'; return; }
+  for(const [m3uName, xmltvId] of mapped){
+    const col = document.createElement('div'); col.className='timeline-col';
+    const title = document.createElement('div'); title.className='hour'; title.textContent = m3uName;
+    col.appendChild(title);
+    const events = (byChannel[xmltvId] || []).sort((a,b)=> new Date(a.start)-new Date(b.start));
+    events.forEach(e=>{
+      const ev = document.createElement('div'); ev.className='event'; ev.draggable = true;
+      ev.dataset.id = e.id;
+      ev.innerHTML = `<div style="font-weight:700">${e.title}</div><div class="tiny">${formatShort(e.start)} → ${formatShort(e.stop)}</div>
+        <div class="tiny">${e.desc?.slice(0,200)}</div>
+        <div style="margin-top:6px"><button onclick="editEvent('${e.id}')">Edit</button>
+          <button onclick="enrichEvent('${e.id}')">Enrich (TVmaze)</button>
         </div>`;
+      // drag handling to nudge time
+      ev.addEventListener('dragstart', (evdr)=>{ evdr.dataTransfer.setData('text/plain', e.id); ev.classList.add('dragging');});
+      ev.addEventListener('dragend', ()=>{ ev.classList.remove('dragging');});
+      // allow drop on column to move time by hours +/-1 by dropping above/below? Simpler: drop to nudge by +30min
+      col.addEventListener('dragover', evv=>evv.preventDefault());
+      col.addEventListener('drop', evv=>{
+        evv.preventDefault();
+        const draggedId = evv.dataTransfer.getData('text/plain');
+        // nudge by +30 minutes on drop
+        nudgeEventTime(draggedId, 30);
+        renderTimeline();
+      });
+      col.appendChild(ev);
     });
-
-    document.getElementById("epgList").innerHTML = html;
+    cols.appendChild(col);
+  }
+  box.appendChild(cols);
 }
 
-function editEvent(i, newDesc) {
-    epgEvents[i].desc = newDesc;
+/* format helpers */
+function formatShort(x){
+  // xmltv time like 20250918080000 +0000 or 20250918080000
+  const dt = parseXmltvTime(x);
+  return dt ? dt.toLocaleString() : x;
+}
+function parseXmltvTime(s){
+  if(!s) return null;
+  // accept formats like 20250918080000 +0000 or 20250918080000
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  if(m){
+    const [_,Y,MM,D,hh,mm,ss] = m;
+    const iso = `${Y}-${MM}-${D}T${hh}:${mm}:${ss}Z`;
+    return new Date(iso);
+  }
+  // fallback parse
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+function formatXmltvTime(dt){
+  const z = dt.toISOString().replace(/[-:]/g,'').split('.')[0] + ' +0000';
+  // produce format 20250918080000 +0000
+  const y = dt.getUTCFullYear().toString().padStart(4,'0');
+  const M = (dt.getUTCMonth()+1).toString().padStart(2,'0');
+  const D = dt.getUTCDate().toString().padStart(2,'0');
+  const h = dt.getUTCHours().toString().padStart(2,'0');
+  const m = dt.getUTCMinutes().toString().padStart(2,'0');
+  const s = dt.getUTCSeconds().toString().padStart(2,'0');
+  return `${y}${M}${D}${h}${m}${s} +0000`;
+}
+function nudgeEventTime(eventId, minutes){
+  const e = state.events.find(x=>x.id===eventId);
+  if(!e) return;
+  const dt = parseXmltvTime(e.start) || new Date();
+  dt.setMinutes(dt.getMinutes() + minutes);
+  const dur = (parseXmltvTime(e.stop) - parseXmltvTime(e.start)) || (60*60*1000);
+  e.start = formatXmltvTime(dt);
+  e.stop = formatXmltvTime(new Date(dt.getTime()+dur));
 }
 
-/* ------------------------------
-    EXPORT XMLTV
---------------------------------*/
-function exportXMLTV() {
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n`;
-
-    // channels
-    xmltvChannels.forEach(ch => {
-        xml += `<channel id="${ch.id}"><display-name>${ch.name}</display-name></channel>\n`;
-    });
-
-    // programmes
-    epgEvents.forEach(ev => {
-        xml += `<programme start="${ev.start}" stop="${ev.stop}" channel="${ev.channel}">`;
-        xml += `<title>${ev.title}</title>`;
-        xml += `<desc>${ev.desc}</desc>`;
-        xml += `</programme>\n`;
-    });
-
-    xml += `</tv>`;
-
-    downloadFile("epg.xml", xml);
+/* edit modal (simple prompt) */
+function editEvent(id){
+  const e = state.events.find(x=>x.id===id); if(!e) return;
+  const newTitle = prompt('Edit title', e.title) || e.title;
+  const newDesc = prompt('Edit description', e.desc) || e.desc;
+  e.title = newTitle; e.desc = newDesc;
+  renderTimeline();
 }
 
-/* ------------------------------
-    EXPORT M3U
---------------------------------*/
-function exportM3U() {
-    let text = "#EXTM3U\n";
-
-    m3uChannels.forEach(ch => {
-        const id = channelMap[ch.name] || "";
-        text += `#EXTINF:-1 tvg-id="${id}",${ch.name}\n${ch.url}\n`;
-    });
-
-    downloadFile("playlist.m3u", text);
+/* Enrich an event using TVmaze */
+async function enrichEvent(id){
+  const e = state.events.find(x=>x.id===id); if(!e) return;
+  // call TVmaze search for show by title (singlesearch)
+  const q = encodeURIComponent(e.title.replace(/ *\(.+\)*/,''));
+  try{
+    const r = await fetch(`https://api.tvmaze.com/singlesearch/shows?q=${q}`);
+    if(!r.ok) return alert('TVmaze no match');
+    const js = await r.json();
+    // attach enrichment to event
+    e.desc = (js.summary ? js.summary.replace(/<[^>]+>/g,'') : '') + '\n\n' + (e.desc||'');
+    e.tvmaze = {id:js.id, name:js.name, image: js.image?.medium || js.image?.original || ''};
+    alert('Enriched from TVmaze: ' + js.name);
+    renderTimeline();
+  }catch(err){
+    alert('TVmaze fetch failed (CORS?). Check console.');
+    console.error(err);
+  }
 }
 
-/* ------------------------------
-    UTILITY – DOWNLOAD
---------------------------------*/
-function downloadFile(filename, data) {
-    const blob = new Blob([data], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-
-    URL.revokeObjectURL(url);
-
-    document.getElementById("exportMsg").innerText =
-        "File exported!";
+/* ============================
+   EXPORT: XMLTV / XMLTV.GZ / M3U
+   ============================ */
+function buildXmltvString(){
+  // build channels from xmltvChannels that are mapped and used
+  const mappedIds = new Set(Object.values(state.mappings));
+  const usedChannels = state.xmltvChannels.filter(c=> mappedIds.has(c.id));
+  const merged = computeMergedEvents();
+  const header = '<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="client-epg-editor">\n';
+  let body = '';
+  usedChannels.forEach(c=>{
+    body += `<channel id="${escapeXml(c.id)}"><display-name>${escapeXml(c.displayName)}</display-name></channel>\n`;
+  });
+  merged.forEach(ev=>{
+    body += `<programme start="${ev.start}" stop="${ev.stop}" channel="${escapeXml(ev.channel)}">\n`;
+    body += `<title>${escapeXml(ev.title)}</title>\n`;
+    if(ev.desc) body += `<desc>${escapeXml(ev.desc)}</desc>\n`;
+    body += `</programme>\n`;
+  });
+  const footer = '</tv>';
+  return header + body + footer;
 }
+function escapeXml(s){ if(!s) return ''; return s.replace(/[<>&'"]/g, c=> ({'<':'&lt;', '>':'&gt;', '&':'&amp;', "'":'&apos;', '"':'&quot;'}[c])); }
+
+xs('#downloadXml').addEventListener('click', ()=>{
+  const xml = buildXmltvString();
+  const blob = new Blob([xml], {type:'application/xml'});
+  downloadBlob(blob, 'epg.xml');
+});
+
+xs('#downloadGz').addEventListener('click', ()=>{
+  const xml = buildXmltvString();
+  // use pako to gzip
+  try{
+    const gz = pako.gzip(xml);
+    const blob = new Blob([gz], {type:'application/gzip'});
+    downloadBlob(blob, 'epg.xml.gz');
+  }catch(e){ alert('gzip failed: ' + e.message); }
+});
+
+xs('#downloadM3U').addEventListener('click', ()=>{
+  let text = '#EXTM3U\n';
+  for(const m of state.m3uChannels){
+    const id = state.mappings[m.name] || m.tvgId || '';
+    text += `#EXTINF:-1 tvg-id="${id}",${m.name}\n${m.url}\n`;
+  }
+  downloadBlob(new Blob([text], {type:'text/plain'}), 'playlist.m3u');
+});
+
+/* ============================
+   PROJECT SAVE / LOAD
+   ============================ */
+xs('#saveProject').addEventListener('click', ()=>{
+  const proj = {
+    sources: state.sources.map(s=> ({id:s.id,name:s.name,type:s.type,url:s.url,priority:s.priority,raw:s.raw,enabled:s.enabled})),
+    m3uChannels: state.m3uChannels,
+    xmltvChannels: state.xmltvChannels.map(x=>({id:x.id,displayName:x.displayName})),
+    events: state.events,
+    mappings: state.mappings,
+    theme: state.theme
+  };
+  localStorage.setItem('epg_project', JSON.stringify(proj));
+  alert('Project saved to LocalStorage');
+});
+xs('#loadProject').addEventListener('click', ()=>{
+  const proj = JSON.parse(localStorage.getItem('epg_project') || 'null');
+  if(!proj) return alert('No saved project');
+  state.sources = proj.sources || [];
+  state.m3uChannels = proj.m3uChannels || [];
+  state.xmltvChannels = proj.xmltvChannels || [];
+  state.events = proj.events || [];
+  state.mappings = proj.mappings || {};
+  state.theme = proj.theme || 'light';
+  document.body.setAttribute('data-theme', state.theme);
+  xs('#toggleTheme').innerText = state.theme==='dark'?'Light':'Dark';
+  renderAll();
+});
+xs('#clearProject').addEventListener('click', ()=>{
+  if(!confirm('Clear local project?')) return;
+  state.sources=[]; state.m3uChannels=[]; state.xmltvChannels=[]; state.events=[]; state.mappings={};
+  localStorage.removeItem('epg_project');
+  renderAll();
+});
+
+/* ============================
+   UTIL: XMLTV String parsing to state
+   ============================ */
+xs('#minifyBtn').addEventListener('click', ()=> {
+  // provide a simple minify: remove whitespace between tags
+  const xml = buildXmltvString();
+  const min = xml.replace(/>\s+</g,'><').trim();
+  const blob = new Blob([min], {type:'text/plain'});
+  downloadBlob(blob, 'epg.min.xml');
+});
+
+function renderAll(){
+  renderSourceList(); renderXmltvList(); renderM3UList(); renderMappings(); renderTimeline();
+}
+
+/* ============================
+   THEME
+   ============================ */
+xs('#toggleTheme').addEventListener('click', ()=>{
+  state.theme = state.theme==='dark' ? 'light' : 'dark';
+  document.body.setAttribute('data-theme', state.theme);
+  xs('#toggleTheme').innerText = state.theme==='dark'?'Light':'Dark';
+  localStorage.setItem('epg_theme', state.theme);
+});
+
+/* initial render */
+renderAll();
 </script>
 </body>
 </html>
