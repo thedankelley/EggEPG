@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EPG Editor (Client-Side)</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background: #f4f4f4;
+    }
+    h1 { text-align: center; }
+    .section {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .channel-list, .epg-list {
+        max-height: 300px;
+        overflow-y: scroll;
+        border: 1px solid #ccc;
+        background: #fafafa;
+        padding: 10px;
+        font-size: 14px;
+    }
+    button {
+        padding: 8px 14px;
+        margin: 5px 0;
+        cursor: pointer;
+    }
+    input[type=text], input[type=url], textarea {
+        width: 100%;
+        padding: 6px;
+        margin: 5px 0 10px 0;
+    }
+</style>
+</head>
+<body>
+<h1>Client-Side IPTV EPG Editor</h1>
+
+<div class="section">
+    <h2>1. Load M3U Playlist</h2>
+    <input type="file" id="m3uFile">
+    <button onclick="loadM3U()">Load M3U</button>
+    <div id="m3uInfo"></div>
+</div>
+
+<div class="section">
+    <h2>2. Load XMLTV EPG Sources</h2>
+    <input type="url" id="xmltvUrl" placeholder="Enter XMLTV URL">
+    <button onclick="fetchXMLTV()">Fetch XMLTV</button>
+
+    <p>Or upload local XMLTV:</p>
+    <input type="file" id="xmltvFile">
+    <button onclick="loadXMLTV()">Load XMLTV</button>
+
+    <div id="xmltvInfo"></div>
+</div>
+
+<div class="section">
+    <h2>3. Channel Mapping</h2>
+    <button onclick="autoMapChannels()">Auto-Match</button>
+    <div id="mappingResults"></div>
+</div>
+
+<div class="section">
+    <h2>4. EPG Editor</h2>
+    <div id="epgList" class="epg-list"></div>
+</div>
+
+<div class="section">
+    <h2>5. Export</h2>
+    <button onclick="exportXMLTV()">Export XMLTV</button>
+    <button onclick="exportM3U()">Export M3U</button>
+    <div id="exportMsg"></div>
+</div>
+
+<script>
+/* ------------------------------
+    GLOBAL STATE
+--------------------------------*/
+let m3uChannels = [];
+let epgEvents = [];       // list of all EPG programs
+let xmltvChannels = [];   // parsed XMLTV channels
+let channelMap = {};      // m3uName -> xmltvChannelId
+
+/* ------------------------------
+    M3U PARSER
+--------------------------------*/
+function parseM3U(text) {
+    const lines = text.split("\n");
+    const channels = [];
+    let current = {};
+
+    for (let line of lines) {
+        line = line.trim();
+
+        if (line.startsWith("#EXTINF")) {
+            const name = line.split(",").slice(1).join(",");
+            const tvgIdMatch = line.match(/tvg-id="([^"]+)"/);
+            current = {
+                name,
+                tvgId: tvgIdMatch ? tvgIdMatch[1] : ""
+            };
+        } else if (line.startsWith("http")) {
+            current.url = line;
+            channels.push(current);
+            current = {};
+        }
+    }
+    return channels;
+}
+
+function loadM3U() {
+    const file = document.getElementById("m3uFile").files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        m3uChannels = parseM3U(reader.result);
+        document.getElementById("m3uInfo").innerText =
+            `Loaded ${m3uChannels.length} channels`;
+    };
+    reader.readAsText(file);
+}
+
+/* ------------------------------
+    XMLTV PARSER
+--------------------------------*/
+function parseXMLTV(text) {
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, "text/xml");
+
+    const channels = [...xml.getElementsByTagName("channel")];
+    const programmes = [...xml.getElementsByTagName("programme")];
+
+    xmltvChannels = channels.map(ch => ({
+        id: ch.getAttribute("id"),
+        name: ch.getElementsByTagName("display-name")[0]?.textContent || ""
+    }));
+
+    programmes.forEach(p => {
+        epgEvents.push({
+            channel: p.getAttribute("channel"),
+            start: p.getAttribute("start"),
+            stop: p.getAttribute("stop"),
+            title: p.getElementsByTagName("title")[0]?.textContent || "",
+            desc: p.getElementsByTagName("desc")[0]?.textContent || ""
+        });
+    });
+}
+
+async function fetchXMLTV() {
+    const url = document.getElementById("xmltvUrl").value;
+    if (!url) return;
+
+    try {
+        const res = await fetch(url);
+        const text = await res.text();
+        parseXMLTV(text);
+        document.getElementById("xmltvInfo").innerText =
+            `Loaded ${xmltvChannels.length} channels, ${epgEvents.length} events`;
+    } catch (e) {
+        alert("Failed: " + e.message);
+    }
+}
+
+function loadXMLTV() {
+    const file = document.getElementById("xmltvFile").files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        parseXMLTV(reader.result);
+        document.getElementById("xmltvInfo").innerText =
+            `Loaded ${xmltvChannels.length} channels, ${epgEvents.length} events`;
+    };
+    reader.readAsText(file);
+}
+
+/* ------------------------------
+    AUTO MAPPING
+--------------------------------*/
+function autoMapChannels() {
+    channelMap = {};
+
+    m3uChannels.forEach(m => {
+        const match = xmltvChannels.find(x =>
+            x.name.toLowerCase().includes(m.name.toLowerCase())
+        );
+        if (match) channelMap[m.name] = match.id;
+    });
+
+    let html = "<ul>";
+    for (let m of m3uChannels) {
+        html += `<li>${m.name} → ${channelMap[m.name] || "NOT FOUND"}</li>`;
+    }
+    html += "</ul>";
+
+    document.getElementById("mappingResults").innerHTML = html;
+
+    renderEPG();
+}
+
+/* ------------------------------
+    RENDER / EDIT EPG
+--------------------------------*/
+function renderEPG() {
+    let html = "";
+
+    epgEvents.forEach((ev, i) => {
+        html += `
+        <div style="padding:6px;border-bottom:1px solid #ddd">
+            <b>${ev.title}</b><br>
+            <i>${ev.start} → ${ev.stop}</i><br>
+            <textarea onchange="editEvent(${i}, this.value)">${ev.desc}</textarea>
+        </div>`;
+    });
+
+    document.getElementById("epgList").innerHTML = html;
+}
+
+function editEvent(i, newDesc) {
+    epgEvents[i].desc = newDesc;
+}
+
+/* ------------------------------
+    EXPORT XMLTV
+--------------------------------*/
+function exportXMLTV() {
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n`;
+
+    // channels
+    xmltvChannels.forEach(ch => {
+        xml += `<channel id="${ch.id}"><display-name>${ch.name}</display-name></channel>\n`;
+    });
+
+    // programmes
+    epgEvents.forEach(ev => {
+        xml += `<programme start="${ev.start}" stop="${ev.stop}" channel="${ev.channel}">`;
+        xml += `<title>${ev.title}</title>`;
+        xml += `<desc>${ev.desc}</desc>`;
+        xml += `</programme>\n`;
+    });
+
+    xml += `</tv>`;
+
+    downloadFile("epg.xml", xml);
+}
+
+/* ------------------------------
+    EXPORT M3U
+--------------------------------*/
+function exportM3U() {
+    let text = "#EXTM3U\n";
+
+    m3uChannels.forEach(ch => {
+        const id = channelMap[ch.name] || "";
+        text += `#EXTINF:-1 tvg-id="${id}",${ch.name}\n${ch.url}\n`;
+    });
+
+    downloadFile("playlist.m3u", text);
+}
+
+/* ------------------------------
+    UTILITY – DOWNLOAD
+--------------------------------*/
+function downloadFile(filename, data) {
+    const blob = new Blob([data], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+    document.getElementById("exportMsg").innerText =
+        "File exported!";
+}
+</script>
+</body>
+</html>
